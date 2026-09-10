@@ -1,0 +1,4 @@
+interface:
+  display_name: "Workflow TDD"
+  short_description: "Run small red-green slices against an agreed public seam"
+  default_prompt: "Use $workflow-tdd to implement this task through focused red-green slices."
