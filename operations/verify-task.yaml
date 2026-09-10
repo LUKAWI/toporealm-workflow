@@ -1,0 +1,5 @@
+applies_to: workflow.task
+input_schema: workflow.verify-task/input-v1
+input_template:
+  source: self
+  verdict: passed

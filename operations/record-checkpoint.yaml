@@ -1,0 +1,6 @@
+applies_to: workflow.task
+input_schema: workflow.record-checkpoint/input-v1
+input_template:
+  id: checkpoint-id
+  status: passed
+  verifier: self

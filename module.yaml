@@ -21,7 +21,19 @@ contributes:
       declaration: schemas/relations/iterates.yaml
   capabilities: []
   validators: []
-  operations: []
+  operations:
+    - { id: create-task, declaration: operations/create-task.yaml }
+    - { id: create-relation, declaration: operations/create-relation.yaml }
+    - { id: next-actions, declaration: operations/next-actions.yaml }
+    - { id: transition-task, declaration: operations/transition-task.yaml }
+    - { id: claim-task, declaration: operations/claim-task.yaml }
+    - { id: record-checkpoint, declaration: operations/record-checkpoint.yaml }
+    - { id: record-report, declaration: operations/record-report.yaml }
+    - { id: verify-task, declaration: operations/verify-task.yaml }
+    - { id: retry-task, declaration: operations/retry-task.yaml }
+    - { id: activate-fallback, declaration: operations/activate-fallback.yaml }
+    - { id: record-iteration, declaration: operations/record-iteration.yaml }
+    - { id: set-class, declaration: operations/set-class.yaml }
 runtime:
   entry: dist/runtime.js
 ui:

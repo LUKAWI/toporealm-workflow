@@ -1,0 +1,6 @@
+input_schema: workflow.create-relation/input-v1
+input_template:
+  id: relation-id
+  kind: workflow.depends_on
+  source: source-task
+  target: target-task

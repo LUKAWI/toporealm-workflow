@@ -1,0 +1,4 @@
+input_schema: workflow.create-task/input-v1
+input_template:
+  id: task-id
+  label: Task label

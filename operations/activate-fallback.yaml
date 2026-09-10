@@ -1,0 +1,4 @@
+applies_to: workflow.task
+input_schema: workflow.activate-fallback/input-v1
+input_template:
+  fallbackTarget: task-id

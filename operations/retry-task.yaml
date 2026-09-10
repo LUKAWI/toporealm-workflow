@@ -1,0 +1,3 @@
+applies_to: workflow.task
+input_schema: workflow.retry-task/input-v1
+input_template: {}

@@ -1,0 +1,5 @@
+input_schema: workflow.record-iteration/input-v1
+input_template:
+  id: iteration-id
+  source: source-task
+  target: target-task
