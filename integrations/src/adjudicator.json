@@ -1,0 +1,7 @@
+{
+  "id": "workflow-adjudicator",
+  "mode": "suggested",
+  "verificationSource": "independent",
+  "canonicalPrompt": "agents/workflow-adjudicator.md",
+  "hosts": ["codex", "claude", "pi"]
+}

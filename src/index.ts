@@ -10,4 +10,5 @@ export * from "./domain/index.js";
 export * from "./scheduler/index.js";
 export * from "./evidence/index.js";
 export * from "./failure/index.js";
+export * from "./adjudication/index.js";
 export { WORKFLOW_OPERATIONS, createWorkflowRuntime } from "./runtime.js";
