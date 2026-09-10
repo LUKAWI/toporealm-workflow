@@ -1,0 +1,18 @@
+format: toporealm.module/v1
+id: workflow
+namespace: workflow
+version: 0.1.0-alpha.0
+supports:
+  schemas: [1]
+contributes:
+  object_kinds: []
+  relation_kinds: []
+  capabilities: []
+  validators: []
+  operations: []
+runtime:
+  entry: dist/runtime.js
+ui:
+  contribution: web/contribution.json
+skills:
+  directory: skills

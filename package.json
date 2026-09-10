@@ -1,0 +1,58 @@
+{
+  "name": "@lukawi/toporealm-workflow",
+  "version": "0.1.0-alpha.0",
+  "description": "Workflow domain module for TopoRealm",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LUKAWI/toporealm-workflow.git"
+  },
+  "homepage": "https://github.com/LUKAWI/toporealm-workflow#readme",
+  "bugs": {
+    "url": "https://github.com/LUKAWI/toporealm-workflow/issues"
+  },
+  "toporealm": "module.yaml",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./runtime": {
+      "types": "./dist/runtime.d.ts",
+      "import": "./dist/runtime.js"
+    },
+    "./module.yaml": "./module.yaml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "module.yaml",
+    "skills",
+    "integrations",
+    "web"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "verify": "npm run typecheck && npm run test && npm run build",
+    "prepack": "npm run verify"
+  },
+  "devDependencies": {
+    "@lukawi/toporealm": "^0.1.0",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8",
+    "zod": "^3.25.76"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "preview"
+  }
+}

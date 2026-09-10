@@ -1,0 +1,5 @@
+{
+  "id": "workflow.view",
+  "label": "Workflow",
+  "entry": "./index.js"
+}
