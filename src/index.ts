@@ -7,3 +7,5 @@ export const workflowModule = {
 export type WorkflowModule = typeof workflowModule;
 
 export * from "./domain/index.js";
+export * from "./scheduler/index.js";
+export * from "./evidence/index.js";
