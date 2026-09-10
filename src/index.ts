@@ -5,3 +5,5 @@ export const workflowModule = {
 } as const;
 
 export type WorkflowModule = typeof workflowModule;
+
+export * from "./domain/index.js";

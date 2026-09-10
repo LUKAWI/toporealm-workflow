@@ -1,0 +1,5 @@
+kind: workflow.task
+label: Workflow task
+required: [status, definitionOfDone, attempts, maxAttempts, reviewSuggested]
+status_values: [pending, ready, running, passed, failed, blocked, cancelled]
+class_values: [quick, standard, program]

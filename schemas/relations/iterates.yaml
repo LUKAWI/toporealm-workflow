@@ -1,0 +1,5 @@
+kind: workflow.iterates
+label: Iterates
+direction: directed
+source_kind: workflow.task
+target_kind: workflow.task

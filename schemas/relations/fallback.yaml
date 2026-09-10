@@ -1,0 +1,5 @@
+kind: workflow.fallback
+label: Fallback
+direction: directed
+source_kind: workflow.task
+target_kind: workflow.task

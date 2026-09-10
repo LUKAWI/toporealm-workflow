@@ -5,8 +5,20 @@ version: 0.1.0-alpha.0
 supports:
   schemas: [1]
 contributes:
-  object_kinds: []
-  relation_kinds: []
+  object_kinds:
+    - id: task
+      declaration: schemas/objects/task.yaml
+    - id: checkpoint
+      declaration: schemas/objects/checkpoint.yaml
+    - id: execution_report
+      declaration: schemas/objects/execution-report.yaml
+  relation_kinds:
+    - id: depends_on
+      declaration: schemas/relations/depends-on.yaml
+    - id: fallback
+      declaration: schemas/relations/fallback.yaml
+    - id: iterates
+      declaration: schemas/relations/iterates.yaml
   capabilities: []
   validators: []
   operations: []

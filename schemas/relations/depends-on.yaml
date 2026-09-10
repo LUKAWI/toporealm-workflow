@@ -1,0 +1,5 @@
+kind: workflow.depends_on
+label: Depends on
+direction: directed
+source_kind: workflow.task
+target_kind: workflow.task

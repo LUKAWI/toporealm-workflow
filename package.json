@@ -33,6 +33,7 @@
   "files": [
     "dist",
     "module.yaml",
+    "schemas",
     "skills",
     "integrations",
     "web"

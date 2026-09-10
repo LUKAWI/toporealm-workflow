@@ -1,0 +1,5 @@
+kind: workflow.checkpoint
+label: Workflow checkpoint
+required: [taskId, status, verifier]
+status_values: [pending, running, passed, failed, skipped]
+verifier_values: [self, independent, human]
