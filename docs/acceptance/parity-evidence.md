@@ -36,7 +36,7 @@
 | P30 | 实现通过 | `tests/adjudication.test.ts`、`tests/host-projections.test.ts`：仅建议型 adjudicator，无 designer。 |
 | P31 | 实现通过 | `tests/packaging.test.ts`：真实 tarball 原子注册 runtime、Skills、Web、hosts。 |
 | P32 | 实现通过 | `tests/packaging.test.ts`、`tests/module-lifecycle.test.ts`：缺失告警、无损读取及重装恢复。 |
-| P33 | 实现通过 | `.github/workflows/ci.yml` 的平台矩阵及 `tests/host-projections.test.ts`；远端运行凭据由 l4_platform_matrix 收口。 |
+| P33 | 实现通过 | `.github/workflows/ci.yml`、`tests/host-projections.test.ts` 与 `docs/acceptance/platform-matrix.md`：三平台、三宿主远端运行全部通过。 |
 | P34 | 实现通过 | `tests/dogfood.test.ts`：真实安装后的 program 场景；由 l4_dogfood 收口事件包。 |
 | P35 | 终局后置 | `tests/browser-workflow.test.ts` 已证明 Web 能力；用户放行凭据由依赖本节点的 l5_human_acceptance 记录。 |
 | P36 | 终局后置 | `tests/packaging.test.ts` 已证明发布制品能力；registry、tag、Release 和 clean install 由 l5_release 记录。 |
