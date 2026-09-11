@@ -1,0 +1,4 @@
+interface:
+  display_name: "Workflow Join"
+  short_description: "Join an existing workflow with only the context needed next"
+  default_prompt: "Use $workflow-join to find and prepare the next eligible task."

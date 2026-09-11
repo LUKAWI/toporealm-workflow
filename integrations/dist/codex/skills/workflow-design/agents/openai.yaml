@@ -1,0 +1,4 @@
+interface:
+  display_name: "Workflow Design"
+  short_description: "Design and review a layered executable workflow topology"
+  default_prompt: "Use $workflow-design to turn this request into an executable topology for review."

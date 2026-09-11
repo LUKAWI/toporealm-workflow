@@ -24,7 +24,7 @@ describe("Workflow Skills", () => {
   });
 
   it("共享语义正本列出全部真实 operation，且技能不引用旧 plumber/graph 专用入口", () => {
-    const protocol = readFileSync(resolve(root, "_shared/protocol.md"), "utf8");
+    const protocol = readFileSync(resolve(root, "protocol.md"), "utf8");
     for (const operation of WORKFLOW_OPERATIONS) expect(protocol).toContain(`\`${operation}\``);
     const published = names.map(skill).join("\n");
     expect(published).not.toMatch(/\/plumber|\bplumber-(?:design|join|execute|review|tdd)\b|`graph_[a-z_]+`/);
@@ -42,7 +42,7 @@ describe("Workflow Skills", () => {
   });
 
   it("保留人审真实性、自标和建议型独立裁决的已决边界", () => {
-    const protocol = readFileSync(resolve(root, "_shared/protocol.md"), "utf8");
+    const protocol = readFileSync(resolve(root, "protocol.md"), "utf8");
     expect(protocol).toContain("agent 不得代签");
     expect(protocol).toContain("不阻塞 self 完成");
     expect(skill("workflow-execute")).toContain("允许自标的执行者写 self verification");

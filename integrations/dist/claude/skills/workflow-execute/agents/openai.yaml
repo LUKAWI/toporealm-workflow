@@ -1,0 +1,4 @@
+interface:
+  display_name: "Workflow Execute"
+  short_description: "Execute an approved workflow through evidence and acceptance"
+  default_prompt: "Use $workflow-execute to continue this approved workflow to completion."

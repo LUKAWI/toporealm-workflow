@@ -1,0 +1,48 @@
+{
+  "name": "toporealm-workflow",
+  "description": "Workflow orchestration module for TopoRealm.",
+  "version": "0.1.0-alpha.0",
+  "author": {
+    "name": "lukawi"
+  },
+  "homepage": "https://github.com/LUKAWI/toporealm-workflow",
+  "repository": "https://github.com/LUKAWI/toporealm-workflow",
+  "license": "MIT",
+  "keywords": [
+    "workflow",
+    "toporealm",
+    "mcp"
+  ],
+  "skills": [
+    {
+      "name": "workflow",
+      "invocation": "model-invoked",
+      "command": null
+    },
+    {
+      "name": "workflow-design",
+      "invocation": "model-invoked",
+      "command": null
+    },
+    {
+      "name": "workflow-join",
+      "invocation": "model-invoked",
+      "command": null
+    },
+    {
+      "name": "workflow-execute",
+      "invocation": "model-invoked",
+      "command": null
+    },
+    {
+      "name": "workflow-review",
+      "invocation": "model-invoked",
+      "command": null
+    },
+    {
+      "name": "workflow-tdd",
+      "invocation": "model-invoked",
+      "command": null
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "toporealm": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@lukawi/toporealm@0.1.3",
+        "mcp"
+      ],
+      "enabled": true
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "name": "toporealm-workflow",
+  "version": "0.1.0-alpha.0",
+  "description": "Workflow orchestration module for TopoRealm.",
+  "author": {
+    "name": "lukawi",
+    "url": "https://github.com/LUKAWI/toporealm-workflow"
+  },
+  "homepage": "https://github.com/LUKAWI/toporealm-workflow",
+  "repository": "https://github.com/LUKAWI/toporealm-workflow",
+  "license": "MIT",
+  "keywords": [
+    "workflow",
+    "toporealm",
+    "mcp",
+    "skills"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "TopoRealm Workflow",
+    "shortDescription": "Design and execute graph-governed workflows",
+    "longDescription": "Design, join, execute, review, and test workflow graphs through TopoRealm Core-owned actions.",
+    "developerName": "lukawi",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/LUKAWI/toporealm-workflow",
+    "defaultPrompt": [
+      "Route this work with Workflow",
+      "Execute the next approved Workflow task"
+    ]
+  }
+}

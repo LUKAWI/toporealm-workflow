@@ -1,0 +1,4 @@
+interface:
+  display_name: "Workflow Review"
+  short_description: "Review task artifacts on specification and convention axes"
+  default_prompt: "Use $workflow-review to independently review this task artifact."
