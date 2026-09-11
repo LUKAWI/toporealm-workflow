@@ -38,7 +38,7 @@
 | P32 | 实现通过 | `tests/packaging.test.ts`、`tests/module-lifecycle.test.ts`：缺失告警、无损读取及重装恢复。 |
 | P33 | 实现通过 | `.github/workflows/ci.yml`、`tests/host-projections.test.ts` 与 `docs/acceptance/platform-matrix.md`：三平台、三宿主远端运行全部通过。 |
 | P34 | 实现通过 | `tests/dogfood.test.ts`：真实安装后的 program 场景；由 l4_dogfood 收口事件包。 |
-| P35 | 终局后置 | `tests/browser-workflow.test.ts` 已证明 Web 能力；用户放行凭据由依赖本节点的 l5_human_acceptance 记录。 |
+| P35 | 实现通过 | `tests/browser-workflow.test.ts` 与 `docs/acceptance/human-acceptance.md`：真实 Web 能力和用户明确放行凭据均已记录。 |
 | P36 | 终局后置 | `tests/packaging.test.ts` 已证明发布制品能力；registry、tag、Release 和 clean install 由 l5_release 记录。 |
 | P37 | 明确排除 | README 与 Release Notes 明示不直接读取旧 `.graph`/`NodeSchema`，未来仅考虑单向转换。 |
 | P38 | 明确排除 | `tests/cli-mcp.test.ts` 只验证 Core 固定 MCP + Workflow Action Reference，不发布旧工具别名。 |

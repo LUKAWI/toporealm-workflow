@@ -54,7 +54,7 @@ describe("Workflow 模块打包与安装闭环", () => {
       sources: { objects: "objects/*.yaml", relations: "relations/*.yaml" },
     });
     const installed = installModule(tarball, { workspaceRoot: workspace });
-    expect(installed).toMatchObject({ id: "workflow", version: "0.1.0-alpha.0", scope: "workspace" });
+    expect(installed).toMatchObject({ id: "workflow", version: "0.1.0", scope: "workspace" });
 
     const registry = new GraphActivator(new WorkspaceModuleResolver(workspace)).activate(store.read());
     expect(registry.modules).toMatchObject([{ id: "workflow", status: "available" }]);

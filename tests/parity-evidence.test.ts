@@ -11,6 +11,6 @@ describe("行为等价逐项证据", () => {
       expect(["实现通过", "组合通过", "终局后置", "明确排除"]).toContain(row[2]!.trim());
       expect(row[3]!.trim().length).toBeGreaterThan(15);
     }
-    expect(rows.filter((row) => row[2]!.trim() === "终局后置").map((row) => row[1])).toEqual(["P35", "P36"]);
+    expect(rows.filter((row) => row[2]!.trim() === "终局后置").map((row) => row[1])).toEqual(["P36"]);
   });
 });

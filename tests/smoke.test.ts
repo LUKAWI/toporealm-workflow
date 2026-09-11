@@ -6,7 +6,7 @@ describe("workflow package baseline", () => {
     expect(workflowModule).toEqual({
       id: "workflow",
       namespace: "workflow",
-      version: "0.1.0-alpha.0",
+      version: "0.1.0",
     });
   });
 });

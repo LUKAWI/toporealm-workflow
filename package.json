@@ -1,7 +1,8 @@
 {
   "name": "@lukawi/toporealm-workflow",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.0",
   "description": "Workflow domain module for TopoRealm",
+  "keywords": ["toporealm", "workflow", "agents", "mcp", "task-graph"],
   "license": "MIT",
   "type": "module",
   "repository": {
@@ -34,7 +35,9 @@
     "./package.json": "./package.json"
   },
   "files": [
+    "CHANGELOG.md",
     "dist",
+    "docs",
     "module.yaml",
     "schemas",
     "operations",
