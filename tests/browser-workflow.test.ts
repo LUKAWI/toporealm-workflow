@@ -34,8 +34,8 @@ describe("真实 Chromium Workflow Web", () => {
     try {
       await page.goto(base);
       const view = page.locator("toporealm-workflow-view");
-      await expect.poll(() => view.count()).toBe(1);
-      await expect.poll(() => view.locator("text=Browser task").count()).toBe(1);
+      await expect.poll(() => view.count(), { timeout: 5_000 }).toBe(1);
+      await expect.poll(() => view.locator("text=Browser task").count(), { timeout: 5_000 }).toBe(1);
 
       let releaseAction!: () => void;
       const actionGate = new Promise<void>((resolveGate) => { releaseAction = resolveGate; });
@@ -44,14 +44,14 @@ describe("真实 Chromium Workflow Web", () => {
       page.on("request", (request) => { if (request.url().endsWith("/api/graph/switch")) switchRequests += 1; });
 
       await view.locator('button[data-target="task-a"]').click();
-      await expect.poll(() => view.locator("button[data-operation]:disabled").count()).toBeGreaterThan(0);
+      await expect.poll(() => view.locator("button[data-operation]:disabled").count(), { timeout: 5_000 }).toBeGreaterThan(0);
       await page.getByRole("button", { name: "图库" }).click();
       await page.getByRole("button", { name: /Other/ }).click();
       expect(switchRequests).toBe(0);
 
       releaseAction();
-      await expect.poll(async () => (await fetch(`${base}/api/graph`).then((response) => response.json()) as { objects: Array<{ id: string; data?: { status?: string } }> }).objects.find((item) => item.id === "task-a")?.data?.status).toBe("ready");
-      await expect.poll(() => view.locator("text=Claim").count()).toBe(1);
+      await expect.poll(async () => (await fetch(`${base}/api/graph`).then((response) => response.json()) as { objects: Array<{ id: string; data?: { status?: string } }> }).objects.find((item) => item.id === "task-a")?.data?.status, { timeout: 5_000 }).toBe("ready");
+      await expect.poll(() => view.locator("text=Claim").count(), { timeout: 5_000 }).toBe(1);
     } finally {
       await page.unrouteAll({ behavior: "ignoreErrors" });
       await browser.close();

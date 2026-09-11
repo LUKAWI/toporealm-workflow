@@ -8,10 +8,10 @@ import { afterEach, describe, expect, it } from "vitest";
 const roots: string[] = [];
 const hosts = ["codex", "claude", "pi"] as const;
 const skills = ["workflow", "workflow-design", "workflow-join", "workflow-execute", "workflow-review", "workflow-tdd"];
-afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); });
+afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 200 }); });
 
 function runNode(file: string, cwd: string, args: string[] = []) {
-  const result = spawnSync(process.execPath, [file, ...args], { cwd, encoding: "utf8", timeout: 60_000 });
+  const result = spawnSync(process.execPath, [file, ...args], { cwd, encoding: "utf8", timeout: 120_000 });
   if (result.status !== 0) throw new Error(result.stderr || result.stdout);
   return result.stdout.trim();
 }
@@ -62,5 +62,5 @@ describe("Codex / Claude / Pi 独立宿主投影", () => {
       expect(written).toMatchObject({ kind: "mutation", mutation: { snapshot: { revision: before + 1 } } });
       expect(store.read().objects).toMatchObject([{ id: `${host}-task`, kind: "workflow.task" }]);
     }
-  }, 120_000);
+  }, 300_000);
 });

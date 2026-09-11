@@ -62,7 +62,7 @@ describe("Workflow 模块打包与安装闭环", () => {
     expect(registry.relationKinds).toHaveLength(3);
     expect(registry.operations).toHaveLength(12);
     expect(registry.ui).toHaveProperty("workflow");
-    expect(readFileSync(join(installed.root, "module.yaml"), "utf8")).toContain("runtime:\n  entry: dist/runtime.js");
+    expect(readFileSync(join(installed.root, "module.yaml"), "utf8")).toMatch(/runtime:\r?\n  entry: dist\/runtime\.js/);
   }, 30_000);
 
   it("卸载时保留未知对象，完整校验诊断缺失，重装后恢复", () => {
