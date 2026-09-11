@@ -1,5 +1,16 @@
 {
   "id": "workflow.view",
   "label": "Workflow",
-  "entry": "./index.js"
+  "entry": "./web/index.js",
+  "tag": "toporealm-workflow-view",
+  "presentation": {
+    "workflow.task": { "color": "#63d7ff", "icon": "◆" },
+    "workflow.checkpoint": { "color": "#d96a8b", "icon": "◇" },
+    "workflow.execution_report": { "color": "#43c98b", "icon": "↳" }
+  },
+  "forms": {
+    "workflow.task": ["label", "data.status", "data.class", "data.plan", "data.definitionOfDone", "data.reviewSuggested"],
+    "workflow.checkpoint": ["label", "data.taskId", "data.status", "data.verifier", "data.note"],
+    "workflow.execution_report": ["data.taskId", "data.summary", "data.artifacts", "data.blockers"]
+  }
 }

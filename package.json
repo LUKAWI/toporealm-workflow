@@ -48,9 +48,11 @@
     "prepack": "npm run verify"
   },
   "devDependencies": {
-    "@lukawi/toporealm": "^0.1.1",
+    "@lukawi/toporealm": "^0.1.2",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@types/node": "^22.10.0",
+    "jsdom": "^25.0.1",
+    "playwright-core": "^1.63.0",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8",
     "zod": "^3.25.76"
