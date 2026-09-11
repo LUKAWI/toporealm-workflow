@@ -28,6 +28,9 @@
       "import": "./dist/runtime.js"
     },
     "./module.yaml": "./module.yaml",
+    "./web/*": "./web/*",
+    "./skills/*": "./skills/*",
+    "./integrations/*": "./integrations/dist/*",
     "./package.json": "./package.json"
   },
   "files": [
@@ -36,7 +39,7 @@
     "schemas",
     "operations",
     "skills",
-    "integrations",
+    "integrations/dist",
     "web"
   ],
   "scripts": {
