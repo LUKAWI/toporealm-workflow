@@ -1,42 +1,12 @@
-format: toporealm.module/v1
+format: toporealm.module/v2
 id: workflow
-namespace: workflow
-version: 0.1.0
-supports:
-  schemas: [1]
-contributes:
-  object_kinds:
-    - id: task
-      declaration: schemas/objects/task.yaml
-    - id: checkpoint
-      declaration: schemas/objects/checkpoint.yaml
-    - id: execution_report
-      declaration: schemas/objects/execution-report.yaml
-  relation_kinds:
-    - id: depends_on
-      declaration: schemas/relations/depends-on.yaml
-    - id: fallback
-      declaration: schemas/relations/fallback.yaml
-    - id: iterates
-      declaration: schemas/relations/iterates.yaml
-  capabilities: []
-  validators: []
-  operations:
-    - { id: create-task, declaration: operations/create-task.yaml }
-    - { id: create-relation, declaration: operations/create-relation.yaml }
-    - { id: next-actions, declaration: operations/next-actions.yaml }
-    - { id: transition-task, declaration: operations/transition-task.yaml }
-    - { id: claim-task, declaration: operations/claim-task.yaml }
-    - { id: record-checkpoint, declaration: operations/record-checkpoint.yaml }
-    - { id: record-report, declaration: operations/record-report.yaml }
-    - { id: verify-task, declaration: operations/verify-task.yaml }
-    - { id: retry-task, declaration: operations/retry-task.yaml }
-    - { id: activate-fallback, declaration: operations/activate-fallback.yaml }
-    - { id: record-iteration, declaration: operations/record-iteration.yaml }
-    - { id: set-class, declaration: operations/set-class.yaml }
-runtime:
-  entry: dist/runtime.js
+namespace: wf
+version: "1.0.0"
+kinds:
+  objects: [task, checkpoint, execution_report, settings]
+  relations: [depends_on, fallback, iterates]
 ui:
-  contribution: web/contribution.json
-skills:
-  directory: skills
+  color: "#3b82f6"
+  icon: "checkbox"
+  titleKey: title
+entry: ./dist/index.js

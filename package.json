@@ -1,8 +1,8 @@
 {
   "name": "@lukawi/toporealm-workflow",
-  "version": "0.1.0",
-  "description": "Workflow domain module for TopoRealm",
-  "keywords": ["toporealm", "workflow", "agents", "mcp", "task-graph"],
+  "version": "1.0.0",
+  "description": "Workflow domain module for TopoRealm 1.0 — seven-state task lifecycle, evidence-gated completion, dependency/fallback/iteration topology (wf.* namespace)",
+  "keywords": ["toporealm", "workflow", "agents", "task-graph"],
   "license": "MIT",
   "type": "module",
   "repository": {
@@ -15,7 +15,7 @@
   },
   "toporealm": "module.yaml",
   "engines": {
-    "node": ">=20"
+    "node": ">=20.6"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -24,48 +24,35 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./runtime": {
-      "types": "./dist/runtime.d.ts",
-      "import": "./dist/runtime.js"
-    },
     "./module.yaml": "./module.yaml",
-    "./web/*": "./web/*",
     "./skills/*": "./skills/*",
-    "./integrations/*": "./integrations/dist/*",
     "./package.json": "./package.json"
   },
   "files": [
     "CHANGELOG.md",
     "dist",
-    "docs",
     "module.yaml",
-    "schemas",
-    "operations",
     "skills",
-    "integrations/dist",
-    "web"
+    "README.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "integrations:build": "node scripts/build-integrations.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "pretest": "npm run integrations:build && npm run build",
+    "pretest": "npm run build",
     "test": "vitest run",
-    "verify": "npm run typecheck && npm run test && npm run build",
-    "prepack": "npm run integrations:build && npm run verify"
+    "verify": "npm run typecheck && npm run test"
   },
   "devDependencies": {
-    "@lukawi/toporealm": "^0.1.3",
-    "@modelcontextprotocol/sdk": "^1.30.0",
-    "@types/node": "^22.10.0",
-    "jsdom": "^25.0.1",
-    "playwright-core": "^1.63.0",
-    "typescript": "^5.7.2",
-    "vitest": "^2.1.8",
-    "zod": "^3.25.76"
+    "@lukawi/toporealm-client": "file:../toporealm/packages/client",
+    "@lukawi/toporealm-daemon-core": "file:../toporealm/packages/daemon-core",
+    "@lukawi/toporealm-module-host": "file:../toporealm/packages/module-host",
+    "@lukawi/toporealm-module-sdk": "file:../toporealm/packages/module-sdk",
+    "@lukawi/toporealm-protocol": "file:../toporealm/packages/protocol",
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
   },
   "publishConfig": {
-    "access": "public",
-    "tag": "preview"
+    "access": "public"
   }
 }
