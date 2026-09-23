@@ -1,4 +1,0 @@
-applies_to: workflow.task
-input_schema: workflow.transition-task/input-v1
-input_template:
-  status: ready

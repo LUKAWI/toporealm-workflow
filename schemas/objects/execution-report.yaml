@@ -1,3 +1,0 @@
-kind: workflow.execution_report
-label: Workflow execution report
-required: [taskId, summary, artifacts, blockers, createdAt]

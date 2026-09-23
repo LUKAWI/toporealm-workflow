@@ -1,4 +1,0 @@
-applies_to: workflow.task
-input_schema: workflow.claim-task/input-v1
-input_template:
-  claimBy: agent-id
