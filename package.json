@@ -1,6 +1,6 @@
 {
   "name": "@lukawi/toporealm-workflow",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Workflow domain module for TopoRealm 1.0 — seven-state task lifecycle, evidence-gated completion, dependency/fallback/iteration topology (wf.* namespace)",
   "keywords": ["toporealm", "workflow", "agents", "task-graph"],
   "license": "MIT",

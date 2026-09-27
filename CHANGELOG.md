@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.0.1 - 2026-09-27
+
+UX 修复批次（toporealm 1.2.0 plan 批次 F 的 F3–F7；只改命令自省面与报错文案，零行为变更）。
+
+- F3 `wf.create-task`：帮助写明 id 必填且只能放 `--input` JSON 内、不接受位置参数
+  （位置参数会被当 target 处理并报 UNKNOWN_ID，此前误导）。
+- F4 `wf.claim-task`：帮助统一输入键名 `claimBy`（认领者）；`assignedTo`/`startedAt`
+  是系统写入的落盘字段、不收输入（`wf.transition-task` 拒 running 的指引文案同步）。
+- F5 `wf.create-relation`：帮助写明 `wf.depends_on` 方向语义——source 是前置（被依赖），
+  target 是后继（依赖方），source 未 passed 时 target 不可 ready/claim。
+- F6 `wf.*` 报错点名归属：输入解析错误统一为「wf.<命令> 缺输入键：<键名>（…）」/
+  「wf.<命令> 输入键类型错误/取值非法：…」（此前是「source 不能为空」这类无主消息，
+  经宿主鸭子类型重建后无法定位）；12 条命令 title 统一补「必填键：…；可选：…」。
+- F7 `wf.record-report`：帮助消歧 `input.id`（报告自身 id，生成独立证据对象
+  `wf.execution_report`）与位置参数 target（任务 id）；报告经 relations 关联到任务。
+- 12 条 `wf.*` 命令 title/help 全部按 create-task 格式列出输入键 schema。
+
 ## 1.0.0 - 2026-09-23
 
 TopoRealm 1.0 首发移植（blueprint §7；发布门 = 仓库根 `npm test` 全部语义等价用例通过）。

@@ -50,18 +50,28 @@ import type {
   RelationEntity,
 } from "@lukawi/toporealm-module-sdk";
 
-// ---------- 输入解析（0.x runtime.ts 的 strict 解析原样移植） ----------
+// ---------- 输入解析（0.x runtime.ts 的 strict 解析原样移植；1.2.0 F6：报错点名命令归属） ----------
+//
+// 输入键报错必须自报家门：「source 不能为空」这类无主消息经宿主分发面（鸭子类型重建）后
+// 无法定位归属命令——统一改为「wf.<命令> 缺输入键：<键名>（…）」。命令名由注册表包装器
+// 注入 currentCommand（分发是同步单线程的，模块级变量安全）。
+
+let currentCommand = "";
+
+function inputError(message: string): never {
+  fail("INVALID_INPUT", `wf.${currentCommand} ${message}`);
+}
 
 function requiredString(input: Record<string, unknown>, field: string): string {
   const value = input[field];
-  if (typeof value !== "string" || value.trim() === "") fail("INVALID_INPUT", `${field} 不能为空`);
+  if (typeof value !== "string" || value.trim() === "") inputError(`缺输入键：${field}（必填非空字符串，放 --input JSON 内）`);
   return value;
 }
 
 function optionalString(input: Record<string, unknown>, field: string): string | undefined {
   const value = input[field];
   if (value === undefined) return undefined;
-  if (typeof value !== "string") fail("INVALID_INPUT", `${field} 必须是字符串`);
+  if (typeof value !== "string") inputError(`输入键类型错误：${field} 必须是字符串`);
   return value;
 }
 
@@ -69,28 +79,28 @@ function optionalStringArray(input: Record<string, unknown>, field: string): str
   const value = input[field];
   if (value === undefined) return [];
   if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {
-    fail("INVALID_INPUT", `${field} 必须是字符串数组`);
+    inputError(`输入键类型错误：${field} 必须是字符串数组`);
   }
   return [...value];
 }
 
 function enumInput<T extends string>(input: Record<string, unknown>, field: string, values: readonly T[]): T {
   const value = requiredString(input, field);
-  if (!values.includes(value as T)) fail("INVALID_INPUT", `${field}=${value}`);
+  if (!values.includes(value as T)) inputError(`输入键取值非法：${field}=${value}（允许 ${values.join("|")}）`);
   return value as T;
 }
 
 function integerInput(input: Record<string, unknown>, field: string, fallback: number): number {
   const value = input[field];
   if (value === undefined) return fallback;
-  if (!Number.isInteger(value) || Number(value) < 0) fail("INVALID_INPUT", `${field} 必须是非负整数`);
+  if (!Number.isInteger(value) || Number(value) < 0) inputError(`输入键类型错误：${field} 必须是非负整数`);
   return Number(value);
 }
 
 function booleanInput(input: Record<string, unknown>, field: string, fallback = false): boolean {
   const value = input[field];
   if (value === undefined) return fallback;
-  if (typeof value !== "boolean") fail("INVALID_INPUT", `${field} 必须是布尔值`);
+  if (typeof value !== "boolean") inputError(`输入键类型错误：${field} 必须是布尔值`);
   return value;
 }
 
@@ -103,8 +113,8 @@ function isTask(record: EntityRecord | undefined): record is Entity & { kind: ty
 }
 
 function targetTask(ctx: CommandContext): Entity {
-  if (!ctx.target) fail("INVALID_INPUT", "需要提供 wf.task 目标");
-  if (!isTask(ctx.target)) fail("INVALID_INPUT", `目标 "${ctx.target.id}" 不是 ${TASK_KIND}`);
+  if (!ctx.target) inputError("缺位置参数 target：任务 id 放在命令名之后，--input 只收输入键");
+  if (!isTask(ctx.target)) inputError(`位置参数 target "${ctx.target.id}" 不是 ${TASK_KIND} 对象`);
   return ctx.target;
 }
 
@@ -195,7 +205,7 @@ function transitionTask(api: ModuleApi, ctx: CommandContext): CommandOutput {
   const task = taskFromRecord(record);
   const status = enumInput(input, "status", WORKFLOW_STATUSES) as WorkflowStatus;
   if (status === "running") {
-    fail("INVALID_INPUT", "WORKFLOW_USE_CLAIM_TASK: 进入 running 请用 wf.claim-task（认领留痕 assignedTo/startedAt）", {
+    fail("INVALID_INPUT", "WORKFLOW_USE_CLAIM_TASK: 进入 running 请用 wf.claim-task（输入键 claimBy=认领者；assignedTo/startedAt 由系统写入）", {
       hint: `toporealm wf.claim-task ${task.id} --input '{"claimBy":"..."}'`,
     });
   }
@@ -462,14 +472,35 @@ function revisionOf(api: ModuleApi): number | undefined {
 const STATUS_ENUM = { type: "string", enum: [...WORKFLOW_STATUSES] } as const;
 const CLASS_ENUM = { type: "string", enum: [...WORKFLOW_CLASSES] } as const;
 
-export const WORKFLOW_COMMANDS: readonly {
+type WorkflowCommandDef = {
   spec: CommandSpec;
   handler: (api: ModuleApi, ctx: CommandContext) => CommandOutput;
-}[] = [
+};
+
+// 输入解析报错自报命令归属（F6）：handler 统一经包装器注入 currentCommand（同步分发，安全）
+function withCommandName(def: WorkflowCommandDef): WorkflowCommandDef {
+  return {
+    spec: def.spec,
+    handler: (api, ctx) => {
+      const prev = currentCommand;
+      currentCommand = def.spec.name;
+      try {
+        return def.handler(api, ctx);
+      } finally {
+        currentCommand = prev;
+      }
+    },
+  };
+}
+
+export const WORKFLOW_COMMANDS: readonly WorkflowCommandDef[] = (
+  (defs: WorkflowCommandDef[]) => defs.map(withCommandName)
+)([
   {
     spec: {
       name: "create-task",
-      title: "新建 wf.task（status=pending）：id 必填，label/plan/definitionOfDone/maxAttempts/reviewSuggested/class 可选",
+      title:
+        "新建 wf.task（status=pending）：id 必填且只能放 --input JSON 内（本命令不接受位置参数）。必填键：id；可选：label/plan/definitionOfDone/maxAttempts/reviewSuggested/class/now",
       input: {
         type: "object",
         required: ["id"],
@@ -490,7 +521,8 @@ export const WORKFLOW_COMMANDS: readonly {
   {
     spec: {
       name: "create-relation",
-      title: "建 wf.depends_on|wf.fallback|wf.iterates 关系：id/kind/source/target 必填（端点存在性由 core 悬空边检查执法）",
+      title:
+        "建 wf.depends_on|wf.fallback|wf.iterates 关系（端点存在性由 core 悬空边检查执法）。depends_on 方向语义：source 是前置（被依赖），target 是后继（依赖方），source 未 passed 时 target 不可 ready/claim。必填键：id/kind/source/target；可选：label",
       input: {
         type: "object",
         required: ["id", "kind", "source", "target"],
@@ -508,7 +540,7 @@ export const WORKFLOW_COMMANDS: readonly {
   {
     spec: {
       name: "next-actions",
-      title: "只读调度读模型：ready/frontier/blocked（含 unmet 明细）/running/staleRunning/summary",
+      title: "只读调度读模型：ready/frontier/blocked（含 unmet 明细）/running/staleRunning/summary。必填键：无；可选：staleMs/now",
       input: {
         type: "object",
         properties: { staleMs: { type: "integer", minimum: 0 }, now: { type: "string" } },
@@ -519,7 +551,8 @@ export const WORKFLOW_COMMANDS: readonly {
   {
     spec: {
       name: "transition-task",
-      title: "流转 wf.task 七态（running 除外——认领走 wf.claim-task；置 ready 过依赖门禁，置 passed 过完成门禁）",
+      title:
+        "流转 wf.task 七态（running 除外——认领走 wf.claim-task；置 ready 过依赖门禁，置 passed 过完成门禁）。必填键：status；可选：now",
       target: TASK_KIND,
       input: { type: "object", required: ["status"], properties: { status: STATUS_ENUM, now: { type: "string" } } },
     },
@@ -528,7 +561,8 @@ export const WORKFLOW_COMMANDS: readonly {
   {
     spec: {
       name: "claim-task",
-      title: "原子认领：ready → running，写 assignedTo/startedAt（依赖门禁由钩子把关；竞争者只有一个成功）",
+      title:
+        "原子认领：ready → running（依赖门禁由钩子把关；竞争者只有一个成功）。输入键是 claimBy（认领者）；assignedTo/startedAt 由系统写入，不收输入。必填键：claimBy；可选：now",
       target: TASK_KIND,
       input: { type: "object", required: ["claimBy"], properties: { claimBy: { type: "string" }, now: { type: "string" } } },
     },
@@ -537,7 +571,8 @@ export const WORKFLOW_COMMANDS: readonly {
   {
     spec: {
       name: "record-checkpoint",
-      title: "上报 checkpoint（小状态机，同状态幂等）：id/status 必填；新建需 verifier；human 终态只能由 user 确认",
+      title:
+        "上报 checkpoint（小状态机，同状态幂等；human 终态只能由 user 确认）。必填键：id/status（新建 checkpoint 另需 verifier）；可选：actor/by/note/label/now",
       target: TASK_KIND,
       input: {
         type: "object",
@@ -559,7 +594,8 @@ export const WORKFLOW_COMMANDS: readonly {
   {
     spec: {
       name: "record-report",
-      title: "写入 execution report（一等证据对象）：id/summary 必填，artifacts/blockers/notes 可选",
+      title:
+        "写入执行报告（独立一等证据对象 wf.execution_report）：input.id 是报告自身 id（生成独立对象），位置参数 target 是任务 id，报告经 relations 关联到任务。必填键：id/summary；可选：artifacts/blockers/notes/now",
       target: TASK_KIND,
       input: {
         type: "object",
@@ -579,7 +615,8 @@ export const WORKFLOW_COMMANDS: readonly {
   {
     spec: {
       name: "verify-task",
-      title: "记录 verification 结论（self|independent|human × pending|passed|failed）；human passed 只能由 user 记录",
+      title:
+        "记录 verification 结论（source=self|independent|human × verdict=pending|passed|failed；human passed 只能由 user 记录）。必填键：source/verdict；可选：actor/by/note/now",
       target: TASK_KIND,
       input: {
         type: "object",
@@ -599,7 +636,8 @@ export const WORKFLOW_COMMANDS: readonly {
   {
     spec: {
       name: "retry-task",
-      title: "重试 failed|blocked 任务：attempts+1 回 pending，清认领与起止时间（受 maxAttempts 预算限制）",
+      title:
+        "重试 failed|blocked 任务：attempts+1 回 pending，清认领与起止时间（受 maxAttempts 预算限制）。必填键：无；可选：now",
       target: TASK_KIND,
       input: { type: "object", properties: { now: { type: "string" } } },
     },
@@ -608,7 +646,8 @@ export const WORKFLOW_COMMANDS: readonly {
   {
     spec: {
       name: "activate-fallback",
-      title: "重试预算耗尽后激活 fallback 路线：fallbackTarget 必填（目标须在 wf.fallback 关系中，依赖门禁仍生效）",
+      title:
+        "重试预算耗尽后激活 fallback 路线（目标须已在 wf.fallback 关系中，依赖门禁仍生效）。必填键：fallbackTarget；可选：now",
       target: TASK_KIND,
       input: { type: "object", required: ["fallbackTarget"], properties: { fallbackTarget: { type: "string" }, now: { type: "string" } } },
     },
@@ -617,7 +656,7 @@ export const WORKFLOW_COMMANDS: readonly {
   {
     spec: {
       name: "record-iteration",
-      title: "记录迭代关系 wf.iterates：id/source/target 必填，reason 可选（拒绝自环与重复 id）",
+      title: "记录迭代关系 wf.iterates（拒绝自环与重复 id）。必填键：id/source/target；可选：reason/now",
       input: {
         type: "object",
         required: ["id", "source", "target"],
@@ -635,9 +674,9 @@ export const WORKFLOW_COMMANDS: readonly {
   {
     spec: {
       name: "set-class",
-      title: "设档位 quick|standard|program：带 target 设任务档，不带 target 设图级档（wf.settings 单例）",
+      title: "设档位 quick|standard|program：带 target 设任务档，不带 target 设图级档（wf.settings 单例）。必填键：class；可选：无",
       input: { type: "object", required: ["class"], properties: { class: CLASS_ENUM } },
     },
     handler: setClass,
   },
-];
+]);

@@ -13,10 +13,13 @@ TopoRealm 1.0 的 Workflow 领域模块（首发 dogfood）：七态任务生命
 ```bash
 toporealm module add @lukawi/toporealm-workflow   # npm 来源（npm pack --ignore-scripts）
 toporealm module add /path/to/toporealm-workflow  # 本地路径来源
-toporealm cmds --module wf                        # 目录自省（永远等于注册事实）
-toporealm wf.create-task --input '{"id":"t1","label":"写作"}'
-toporealm wf.transition-task t1 --input '{"status":"ready"}'
-toporealm wf.claim-task t1 --input '{"claimBy":"agent-a"}'
+toporealm cmds --module wf                        # 目录自省（永远等于注册事实；title 含必填/可选输入键）
+toporealm wf.create-task --input '{"id":"t1","label":"写作"}'   # id 必填且放 --input 内，无位置参数
+toporealm wf.transition-task t1 --input '{"status":"ready"}'   # 位置参数 target = 任务 id
+toporealm wf.claim-task t1 --input '{"claimBy":"agent-a"}'     # 认领者写 claimBy；assignedTo/startedAt 系统写入
+toporealm wf.create-relation --input '{"id":"d1","kind":"wf.depends_on","source":"t1","target":"t2"}'
+                                                  # depends_on：source 是前置（被依赖），target 是后继（依赖方）
+toporealm wf.record-report t1 --input '{"id":"report-1","summary":"…"}'  # id 是报告自身 id，t1 是任务 target
 toporealm wf.next-actions                         # 调度前沿（ready/frontier/blocked/stale）
 ```
 

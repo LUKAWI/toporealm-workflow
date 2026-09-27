@@ -1,7 +1,7 @@
 format: toporealm.module/v2
 id: workflow
 namespace: wf
-version: "1.0.0"
+version: "1.0.1"
 kinds:
   objects: [task, checkpoint, execution_report, settings]
   relations: [depends_on, fallback, iterates]

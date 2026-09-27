@@ -1,6 +1,7 @@
 # Workflow 模块契约（1.0）
 
-状态：随 `@lukawi/toporealm-workflow@1.0.0` 冻结。规范来源：toporealm 仓库
+状态：随 `@lukawi/toporealm-workflow@1.0.1` 演进（1.0.0 冻结领域语义；1.0.1 只改命令
+自省面与报错文案，见 CHANGELOG）。规范来源：toporealm 仓库
 `docs/rebuild/blueprint.md`（§1.2 模块契约、§7 移植面、§1.7 D24）。
 
 ## 责任边界
@@ -21,7 +22,7 @@
 | npm 包 | `@lukawi/toporealm-workflow` |
 | 模块 id / namespace | `workflow` / `wf` |
 | 模块格式 | `toporealm.module/v2` |
-| 包版本 = module.yaml 版本 | `1.0.0` |
+| 包版本 = module.yaml 版本 | `1.0.1` |
 | 入口 | `module.yaml#entry: ./dist/index.js`（ESM default export） |
 | 运行时依赖 | 无（自包含 dist；module-sdk 仅类型导入，emit 后擦除） |
 

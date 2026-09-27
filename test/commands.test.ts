@@ -29,7 +29,7 @@ describe("workflow 领域命令（wf.* 顶层子命令）", () => {
     const rig = await workflowRig();
     rigs.push(rig);
     const cat = rig.host.catalog();
-    expect(cat.modules).toEqual([{ id: "workflow", version: "1.0.0", namespace: "wf" }]);
+    expect(cat.modules).toEqual([{ id: "workflow", version: "1.0.1", namespace: "wf" }]);
     expect(cat.commands.map((c) => c.id)).toEqual(COMMAND_IDS);
     // 声明词汇进目录（kinds 投影 + owner）
     const kinds = Object.fromEntries(cat.kinds.map((k) => [k.kind, k]));
@@ -220,5 +220,46 @@ describe("workflow 领域命令（wf.* 顶层子命令）", () => {
     await rig.run("wf.claim-task", { target: "s1", input: { claimBy: "w1" } });
     await passTask(rig, "s1");
     expect(taskPayloadOf(rig.core, "s1")["status"]).toBe("passed");
+  });
+
+  it("cmds title 自省面覆盖 UX 修复批次（1.2.0 F3/F4/F5/F7）", async () => {
+    const rig = await workflowRig();
+    rigs.push(rig);
+    const titles = Object.fromEntries(rig.host.catalog().commands.map((c) => [c.id, c.title])) as Record<string, string>;
+    // F3：id 必填且只放 --input，无位置参数
+    expect(titles["wf.create-task"]).toContain("只能放 --input JSON 内");
+    expect(titles["wf.create-task"]).toContain("不接受位置参数");
+    expect(titles["wf.create-task"]).toContain("必填键：id");
+    // F4：认领者输入键是 claimBy；assignedTo/startedAt 系统写入
+    expect(titles["wf.claim-task"]).toContain("claimBy（认领者）");
+    expect(titles["wf.claim-task"]).toContain("assignedTo/startedAt 由系统写入");
+    expect(titles["wf.claim-task"]).toContain("必填键：claimBy");
+    // F5：depends_on 方向语义（source 前置 / target 后继）
+    expect(titles["wf.create-relation"]).toContain("source 是前置（被依赖），target 是后继（依赖方）");
+    // F7：record-report 的 id 是报告自身 id，target 是任务
+    expect(titles["wf.record-report"]).toContain("input.id 是报告自身 id");
+    expect(titles["wf.record-report"]).toContain("位置参数 target 是任务 id");
+    // F6：12 条命令 title 统一带必填/可选输入键清单
+    for (const id of COMMAND_IDS) {
+      expect(titles[id], id).toMatch(/必填键：/);
+    }
+  });
+
+  it("输入报错点名命令归属（1.2.0 F6）：wf.verify-task 缺输入键：source", async () => {
+    const rig = await workflowRig();
+    rigs.push(rig);
+    await readyTask(rig, "vt");
+    const missing = await rig.run("wf.verify-task", { target: "vt", input: {} }).catch((e: unknown) => e);
+    expect(TopoError.is(missing)).toBe(true);
+    expect((missing as TopoError).code).toBe("INVALID_INPUT");
+    expect((missing as TopoError).message).toContain("wf.verify-task 缺输入键：source");
+
+    const badEnum = await rig
+      .run("wf.verify-task", { target: "vt", input: { source: "nope", verdict: "passed" } })
+      .catch((e: unknown) => e);
+    expect((badEnum as TopoError).message).toContain("wf.verify-task 输入键取值非法：source=nope");
+
+    const missingClaim = await rig.run("wf.claim-task", { target: "vt", input: {} }).catch((e: unknown) => e);
+    expect((missingClaim as TopoError).message).toContain("wf.claim-task 缺输入键：claimBy");
   });
 });
