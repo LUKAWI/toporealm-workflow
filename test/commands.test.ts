@@ -29,7 +29,7 @@ describe("workflow 领域命令（wf.* 顶层子命令）", () => {
     const rig = await workflowRig();
     rigs.push(rig);
     const cat = rig.host.catalog();
-    expect(cat.modules).toEqual([{ id: "workflow", version: "1.0.1", namespace: "wf" }]);
+    expect(cat.modules).toEqual([{ id: "workflow", version: "1.0.2", namespace: "wf" }]);
     expect(cat.commands.map((c) => c.id)).toEqual(COMMAND_IDS);
     // 声明词汇进目录（kinds 投影 + owner）
     const kinds = Object.fromEntries(cat.kinds.map((k) => [k.kind, k]));

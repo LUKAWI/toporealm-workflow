@@ -22,7 +22,7 @@ import type { ModuleApi, ModuleEntryPoint } from "@lukawi/toporealm-module-sdk";
 export const workflowModule = {
   id: "workflow",
   namespace: "wf",
-  version: "1.0.1",
+  version: "1.0.2",
 } as const;
 
 function activate(api: ModuleApi): void {

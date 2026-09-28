@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.2 - 2026-09-28
+
+文案指路补全（零行为变更）：`workflow-design` 技能开头补「机械建模原则见基座
+`toporealm-design` 技能」——对象/关系取舍、kind 粒度、payload 形状、id 策略等
+机械原则不在此重复造册，指向基座技能（toporealm §1.12 D45 基座技能体系重组）。
+版本钉点同步：package.json / module.yaml / src（模块身份常量）1.0.1 → 1.0.2。
+
 ## 1.0.1 - 2026-09-27
 
 UX 修复批次（toporealm 1.2.0 plan 批次 F 的 F3–F7；只改命令自省面与报错文案，零行为变更）。

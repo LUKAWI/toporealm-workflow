@@ -5,7 +5,7 @@ description: Design or amend a TopoRealm Workflow task topology with explicit en
 
 # Workflow Design
 
-产物是经用户审核的可执行拓扑，不是实现结果。操作前读 `workflow` 技能中的共享执行协议。
+产物是经用户审核的可执行拓扑，不是实现结果。操作前读 `workflow` 技能中的共享执行协议。机械建模原则（对象/关系取舍、kind 粒度、payload 形状、id 策略）见基座 `toporealm-design` 技能。
 
 1. 固定目标、交付物、非目标和验收条件；关键歧义才询问。
 2. 先定义 entry/exit，再设计少数有意义的分层带；每个 task 写清 plan、可核验 DoD、2–4 个 checkpoint 与领域归属。
