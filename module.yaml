@@ -1,12 +1,17 @@
 format: toporealm.module/v2
 id: workflow
 namespace: wf
-version: "1.0.2"
+version: "1.1.0"
 kinds:
-  objects: [task, checkpoint, execution_report, settings]
-  relations: [depends_on, fallback, iterates]
+  objects: [task, execution_report, settings, domain]
+  relations: [depends_on, fallback, iterates, report_of]
 ui:
   color: "#3b82f6"
   icon: "checkbox"
   titleKey: title
+  kinds:
+    execution_report:
+      represent: "annotation"
+    domain:
+      represent: "container"
 entry: ./dist/index.js

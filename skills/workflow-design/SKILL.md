@@ -9,7 +9,7 @@ description: Design or amend a TopoRealm Workflow task topology with explicit en
 
 1. 固定目标、交付物、非目标和验收条件；关键歧义才询问。
 2. 先定义 entry/exit，再设计少数有意义的分层带；每个 task 写清 plan、可核验 DoD、2–4 个 checkpoint 与领域归属。
-3. 用 `toporealm wf.create-task` 建任务、`toporealm wf.create-relation` 建依赖（`wf.depends_on` source 是前置）；跨领域契约和难逆转决策进入 context/ADR，不把业务字段塞进通用图模型。
+3. 用 `toporealm wf.create-task` 建任务、`toporealm wf.create-relation` 建依赖（`wf.depends_on` source 是前置）；按领域归组用 `toporealm wf.assign-domain --input '{"task":"<任务id>","domain":"<领域名>"}'`（自动建 `wf.domain` 容器与公共 `member_of` 关系）；跨领域契约和难逆转决策进入 context/ADR，不把业务字段塞进通用图模型。checkpoint 只是任务 `payload.checkpoints` 里的条目，设计期写进 plan/DoD，不预建对象。
 4. 检查全部节点从 entry 可达 exit、无意外环、依赖方向正确、并行写集不冲突；用 `toporealm wf.next-actions` 复核调度前沿符合预期。
 5. 向用户展示拓扑、关键取舍与验收标准。未获用户明确批准不得 claim 或执行；批准事实应被真实记录。
 

@@ -131,6 +131,15 @@ describe("program 级真实工作流 dogfood", () => {
       .read({ kinds: ["wf.depends_on", "wf.fallback", "wf.iterates"] })
       .entities.map((e) => e.kind);
     expect(relKinds).toEqual(expect.arrayContaining(["wf.depends_on", "wf.fallback", "wf.iterates"]));
+    // 1.1.0：每份报告自动双写 wf.report_of（7 份报告 = 7 条归属关系）；checkpoint 内嵌任务
+    const reportOfs = rig.core.read({ kinds: ["wf.report_of"] }).entities;
+    expect(reportOfs).toHaveLength(7);
+    expect(reportOfs[0]).toMatchObject({ kind: "wf.report_of", direction: "directed", payload: {} });
+    expect(reportOfs.map((r) => r.id).sort()).toEqual(
+      ["entry", "branch-a", "fallback", "join", "iteration", "human", "exit"].map((t) => `rel-of-report-${t}`).sort(),
+    );
+    expect((taskPayloadOf(rig.core, "exit")["checkpoints"] as unknown[]).length).toBe(1);
+    expect(rig.core.read({ kinds: ["wf.checkpoint"] }).entities).toHaveLength(0);
     // 0.x 断言 .history.json 审计；1.0 等价面 = 统一提交日志（D7）
     expect(rig.core.tailLog(1000).length).toBeGreaterThan(40);
     // 全图终态：除 risky（预算耗尽走 fallback）外全部 passed

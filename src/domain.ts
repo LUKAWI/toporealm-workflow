@@ -37,11 +37,37 @@ export const WORKFLOW_RELATION_KINDS = [
 export type WorkflowRelationKind = (typeof WORKFLOW_RELATION_KINDS)[number];
 
 export const TASK_KIND = "wf.task";
+/** 1.0 独立 checkpoint 对象 kind——1.1.0 起内嵌任务 payload.checkpoints，不再产出（词汇保留供钩子遗留防线） */
 export const CHECKPOINT_KIND = "wf.checkpoint";
 export const REPORT_KIND = "wf.execution_report";
 export const SETTINGS_KIND = "wf.settings";
+/** 1.1.0 领域容器对象（assign-domain 创建；module.yaml ui.kinds 声明 represent: container） */
+export const DOMAIN_KIND = "wf.domain";
 /** 图级档位单例（D24③：0.x manifest.meta.workflow.class 的 1.0 落点） */
 export const SETTINGS_ID = "workflow-settings";
+
+// ---------- 1.1.0 证据挂靠拓扑词汇 ----------
+
+/** 报告→任务归属关系（record-report 同批自动双写：source=报告对象 target=任务对象 direction=directed payload={}）。 */
+export const REPORT_OF_KIND = "wf.report_of";
+/** 报告归属关系的自动 id（同 id 重复提交按 core rel 语义更新 = 幂等）。 */
+export function reportOfRelationId(reportId: string): string {
+  return `rel-of-${reportId}`;
+}
+/** 公共（无命名空间）成员关系：任务 → 领域容器。无主类型所有权法放行（core checkOwnership：ns === null）。 */
+export const MEMBER_OF_KIND = "member_of";
+
+/**
+ * 领域名 → wf.domain 对象 id：小写拉丁、压缩非 [a-z0-9 汉字] 游程为连字符、去首尾连字符。
+ * 汉字保留（isValidEntityId 按磁盘文件名安全执法，CJK 合法）；纯符号名规范化为空串 = 拒绝。
+ */
+export function domainSlugify(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fff]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
 // ---------- 领域对象 ----------
 
@@ -291,6 +317,80 @@ export function checkpointToRecord(checkpoint: WorkflowCheckpoint): AnyRecord {
     if (checkpoint[key] !== undefined) payload[key] = checkpoint[key];
   }
   return { id: checkpoint.id, kind: CHECKPOINT_KIND, payload };
+}
+
+// ---------- 内嵌 checkpoint 条目（1.1.0：checkpoint 不再是独立对象，内嵌任务 payload.checkpoints） ----------
+//
+// 条目键：id/status/verifier/label/note/by/at（taskId 由所属任务承载，不冗余进条目）；
+// 小状态机继续复用 updateCheckpoint（条目 ↔ WorkflowCheckpoint 互转后进同一状态机）。
+
+export interface WorkflowCheckpointEntry {
+  id: string;
+  status: CheckpointStatus;
+  verifier: VerificationSource;
+  label?: string;
+  note?: string;
+  by?: string;
+  at?: string;
+}
+
+/** 结构化解析单个内嵌条目（形状非法抛 INVALID_CHECKPOINT_ENTRY / 状态词汇非法抛 INVALID_CHECKPOINT_STATUS）。 */
+export function checkpointEntryFromRaw(raw: unknown): WorkflowCheckpointEntry {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+    throw domainShapeError("INVALID_CHECKPOINT_ENTRY: 内嵌 checkpoint 条目必须是对象");
+  }
+  const data = raw as Record<string, unknown>;
+  if (typeof data.id !== "string" || data.id === "") {
+    throw domainShapeError("INVALID_CHECKPOINT_ENTRY: 内嵌 checkpoint 条目缺非空字符串 id");
+  }
+  const entry: WorkflowCheckpointEntry = {
+    id: data.id,
+    status: enumValue(data.status ?? "pending", CHECKPOINT_STATUSES, "checkpoint_status"),
+    verifier: enumValue(data.verifier ?? "self", VERIFICATION_SOURCES, "checkpoint_verifier"),
+  };
+  for (const key of ["label", "note", "by", "at"] as const) {
+    const value = optionalString(data[key]);
+    if (value !== undefined) entry[key] = value;
+  }
+  return entry;
+}
+
+/** 条目 → 落盘形状（键序稳定：id/status/verifier 打头，可选键按序追加）。 */
+export function checkpointEntryToRaw(entry: WorkflowCheckpointEntry): Record<string, unknown> {
+  const raw: Record<string, unknown> = { id: entry.id, status: entry.status, verifier: entry.verifier };
+  for (const key of ["label", "note", "by", "at"] as const) {
+    if (entry[key] !== undefined) raw[key] = entry[key];
+  }
+  return raw;
+}
+
+/** 条目 → 状态机通货（taskId 由调用方补——即所属任务 id；label 缺省 = id）。 */
+export function entryToCheckpoint(entry: WorkflowCheckpointEntry, taskId: string): WorkflowCheckpoint {
+  const checkpoint: WorkflowCheckpoint = {
+    id: entry.id,
+    taskId,
+    title: entry.label ?? entry.id,
+    status: entry.status,
+    verifier: entry.verifier,
+  };
+  if (entry.note !== undefined) checkpoint.note = entry.note;
+  if (entry.by !== undefined) checkpoint.by = entry.by;
+  if (entry.at !== undefined) checkpoint.updatedAt = entry.at;
+  return checkpoint;
+}
+
+/** 状态机通货 → 条目（title === id 时不落 label，往返稳定）。 */
+export function checkpointToEntry(checkpoint: WorkflowCheckpoint): WorkflowCheckpointEntry {
+  const entry: WorkflowCheckpointEntry = {
+    id: checkpoint.id,
+    status: checkpoint.status,
+    verifier: checkpoint.verifier,
+  };
+  if (checkpoint.title !== checkpoint.id) entry.label = checkpoint.title;
+  if (checkpoint.note !== undefined) entry.note = checkpoint.note;
+  if (checkpoint.by !== undefined) entry.by = checkpoint.by;
+  if (checkpoint.updatedAt !== undefined) entry.at = checkpoint.updatedAt;
+  return entry;
 }
 
 export function reportFromRecord(record: AnyRecord): WorkflowExecutionReport {

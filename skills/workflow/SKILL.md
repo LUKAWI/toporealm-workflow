@@ -20,17 +20,21 @@ description: Route a TopoRealm Workflow request to quick, standard, or program a
 `toporealm cmds --module wf`；读图 `toporealm read/find`；撤销是用户的手
 （`toporealm undo/redo`），模块没有 undo。领域命令即写缝——绝不手改图文件绕过门禁。
 
-公开命令（12 个）：`wf.create-task`、`wf.create-relation`、`wf.next-actions`、
+公开命令（13 个）：`wf.create-task`、`wf.create-relation`、`wf.next-actions`、
 `wf.transition-task`、`wf.claim-task`、`wf.record-checkpoint`、`wf.record-report`、
 `wf.verify-task`、`wf.retry-task`、`wf.activate-fallback`、`wf.record-iteration`、
-`wf.set-class`。输入 schema 用 `toporealm help wf.<name>` 查看。
+`wf.set-class`、`wf.assign-domain`。输入 schema 用 `toporealm help wf.<name>` 查看。
 
 ### 不变量
 
 - 七态为 `pending → ready → running → passed|failed|blocked`，另有 `cancelled`；running 必须由 claim 进入。
 - `wf.depends_on` 的 source 是前置，target 是后继；前置未全部 passed 时不得置 ready 或 claim。
   该门禁由模块 before-commit 钩子对一切前向写入执法（含 CLI 直改）；undo/redo 是用户的游标，不受门禁拦截。
-- checkpoint 与 execution_report 是一等对象。先完成 checkpoint，再写非空 report，再裁决，最后转 passed。
+- checkpoint 内嵌在任务 `payload.checkpoints`（1.1.0 起无独立 checkpoint 对象，经 `wf.record-checkpoint` 上报）；
+  execution_report 是独立一等证据对象，写入时自动双写 `wf.report_of` 归属关系（id `rel-of-<报告id>`，
+  source=报告 target=任务），payload.taskId 双写冗余。先完成 checkpoint，再写非空 report，再裁决，最后转 passed。
+- 任务按领域归类用 `wf.assign-domain`：`wf.domain` 容器对象不存在则自动创建（id = 领域名 slugify，
+  title 缺省 = 领域名），并建公共 `member_of` 关系（source=任务 target=领域）；重复执行幂等。
 - `human` checkpoint 或 verification 的通过只能记录用户真实确认，agent 不得代签（钩子拦截）。
 - `independent` 复核默认只是 `reviewSuggested` 建议；不阻塞 self 完成，不得伪造成强制 gate。
 - failed/blocked 仅在预算内 retry；预算耗尽后只走已存在的 fallback。iteration 必须用显式 `wf.iterates` 关系留痕。

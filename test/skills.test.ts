@@ -26,7 +26,7 @@ describe("Workflow Skills（1.0）", () => {
     }
   });
 
-  it("共享执行协议并入 router 技能，列出全部 12 个 wf.* 命令", () => {
+  it("共享执行协议并入 router 技能，列出全部 13 个 wf.* 命令（含 1.1.0 assign-domain）", () => {
     const router = skill("workflow");
     expect(router).toContain("共享执行协议");
     const all = WORKFLOW_COMMANDS.map((c) => `wf.${c.spec.name}`);

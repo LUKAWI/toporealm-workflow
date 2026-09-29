@@ -5,9 +5,12 @@
 // fail-fast（0.x operation 内联检查的可观察等价：领域拒绝发生在提交之前，零部分写入）。
 
 import {
-  CHECKPOINT_KIND,
-  checkpointFromRecord,
-  checkpointToRecord,
+  checkpointEntryFromRaw,
+  checkpointEntryToRaw,
+  checkpointToEntry,
+  domainSlugify,
+  entryToCheckpoint,
+  reportOfRelationId,
   relationToRecord,
   reportToRecord,
   SETTINGS_ID,
@@ -15,6 +18,9 @@ import {
   TASK_KIND,
   taskFromRecord,
   taskToRecord,
+  DOMAIN_KIND,
+  MEMBER_OF_KIND,
+  REPORT_OF_KIND,
   VERIFICATION_SOURCES,
   VERIFICATION_VERDICTS,
   CHECKPOINT_STATUSES,
@@ -274,32 +280,27 @@ function recordCheckpoint(api: ModuleApi, ctx: CommandContext): CommandOutput {
     ...(optionalString(input, "note") !== undefined ? { note: optionalString(input, "note") } : {}),
     ...(optionalString(input, "now") !== undefined ? { at: optionalString(input, "now") } : {}),
   };
-  const existing = api.get(id);
-  let checkpoint: WorkflowCheckpoint;
-  if (existing) {
-    if (existing.kind !== CHECKPOINT_KIND) {
-      fail("INVALID_INPUT", `INVALID_CHECKPOINT_KIND: ${existing.kind}（id "${id}" 已被其他对象占用）`);
-    }
-    checkpoint = checkpointFromRecord(existing);
-    if (checkpoint.taskId !== taskId) {
-      fail("INVALID_INPUT", `INVALID_EVIDENCE_TASK: ${id} 属于 ${checkpoint.taskId}，不是 ${taskId}`);
-    }
+  // 1.1.0：checkpoint 内嵌任务 payload.checkpoints（不再是独立对象，INVALID_EVIDENCE_TASK 随内嵌消失）。
+  // 同任务数组内 id 唯一在命令内执法：命中即原位更新并丢弃同 id 重复项；跨任务全图唯一由
+  // before-commit 钩子读候选图执法（CHECKPOINT_ID_TAKEN），命令不预查（保持「钩子是执法面」分工）。
+  const raw: unknown[] = Array.isArray(taskRecord.payload["checkpoints"]) ? [...(taskRecord.payload["checkpoints"] as unknown[])] : [];
+  const index = raw.findIndex(
+    (item) =>
+      item !== null && typeof item === "object" && !Array.isArray(item) && (item as Record<string, unknown>)["id"] === id,
+  );
+  const entryLabel = optionalString(input, "label") ?? optionalString(input, "title");
+  let machine: WorkflowCheckpoint;
+  if (index >= 0) {
     try {
-      checkpoint = updateCheckpoint(checkpoint, status, options);
+      machine = updateCheckpoint(entryToCheckpoint(checkpointEntryFromRaw(raw[index]), taskId), status, options);
     } catch (err) {
       asInputError(err);
     }
   } else {
     const verifier = enumInput(input, "verifier", VERIFICATION_SOURCES) as VerificationSource;
     try {
-      checkpoint = updateCheckpoint(
-        {
-          id,
-          taskId,
-          title: optionalString(input, "label") ?? optionalString(input, "title") ?? id,
-          status: "pending",
-          verifier,
-        },
+      machine = updateCheckpoint(
+        { id, taskId, title: entryLabel ?? id, status: "pending", verifier },
         status,
         options,
       );
@@ -307,10 +308,25 @@ function recordCheckpoint(api: ModuleApi, ctx: CommandContext): CommandOutput {
       asInputError(err);
     }
   }
-  const record = checkpointToRecord(checkpoint);
-  const label = `workflow: checkpoint ${id} -> ${checkpoint.status}`;
-  api.commit({ changes: [{ op: "put", kind: record.kind, id: record.id, payload: record.payload }], label, ifRevision: revisionOf(api) });
-  return { message: label, data: { id, taskId, status: checkpoint.status } };
+  const entryRaw = checkpointEntryToRaw(checkpointToEntry(machine));
+  const next: unknown[] = [];
+  let placed = false;
+  raw.forEach((item, i) => {
+    const sameId =
+      item !== null && typeof item === "object" && !Array.isArray(item) && (item as Record<string, unknown>)["id"] === id;
+    if (!sameId) {
+      next.push(item);
+      return;
+    }
+    if (!placed) {
+      next.push(entryRaw); // 首个同 id 条目原位替换；其余同 id 重复项丢弃（数组内唯一）
+      placed = true;
+    }
+  });
+  if (!placed) next.push(entryRaw);
+  const label = `workflow: checkpoint ${id} -> ${machine.status}`;
+  api.commit({ changes: [{ op: "merge", id: taskId, payload: { checkpoints: next } }], label, ifRevision: revisionOf(api) });
+  return { message: label, data: { id, taskId, status: machine.status } };
 }
 
 function recordReport(api: ModuleApi, ctx: CommandContext): CommandOutput {
@@ -331,9 +347,80 @@ function recordReport(api: ModuleApi, ctx: CommandContext): CommandOutput {
     asInputError(err);
   }
   const record = reportToRecord(report);
+  // 1.1.0 双写：报告对象与 wf.report_of 归属关系（id = rel-of-<报告id>，source=报告 target=任务）
+  // 在同一次 api.commit 内原子落盘——core 悬空边检查对同批候选集放行（put 先建端点，rel 后挂边）；
+  // 同 id 重复提交按 core rel 语义更新（幂等）。payload.taskId 保留（双写冗余，读路径本次不动）。
+  const relation = {
+    op: "rel" as const,
+    kind: REPORT_OF_KIND,
+    id: reportOfRelationId(report.id),
+    source: report.id,
+    target: taskId,
+    payload: {},
+    direction: "directed" as const,
+  };
   const label = `workflow: report ${report.id}`;
-  api.commit({ changes: [{ op: "put", kind: record.kind, id: record.id, payload: record.payload }], label, ifRevision: revisionOf(api) });
-  return { message: label, data: { id: report.id, taskId } };
+  api.commit({
+    changes: [{ op: "put", kind: record.kind, id: record.id, payload: record.payload }, relation],
+    label,
+    ifRevision: revisionOf(api),
+  });
+  return { message: label, data: { id: report.id, taskId, relation: relation.id } };
+}
+
+// ---------- assign-domain（1.1.0 容器类活样板） ----------
+
+function assignDomain(api: ModuleApi, ctx: CommandContext): CommandOutput {
+  const input = ctx.input;
+  const taskId = requiredString(input, "task");
+  const domainName = requiredString(input, "domain");
+  const taskRecord = api.get(taskId);
+  if (!taskRecord || !isTask(taskRecord)) {
+    fail("UNKNOWN_ID", `任务不存在或不是 ${TASK_KIND}："${taskId}"`);
+  }
+  const domainId = domainSlugify(domainName);
+  if (domainId === "" || domainId.length > 200) {
+    inputError(`输入键取值非法：domain=${JSON.stringify(domainName)} 规范化后的 id 须为 1–200 字符（字母/数字/汉字）`);
+  }
+  const existingDomain = api.get(domainId);
+  if (existingDomain && existingDomain.kind !== DOMAIN_KIND) {
+    fail("ID_EXISTS", `id "${domainId}" 已被 ${existingDomain.kind} 占用，无法用作领域容器`, {
+      hint: "换个 domain 名（id 由领域名 slugify 得出），或直接复用既有 wf.domain",
+    });
+  }
+  const relationId = `member-of-${taskId}-${domainId}`;
+  const existingRelation = api
+    .read()
+    .entities.find((e) => "source" in e && e.kind === MEMBER_OF_KIND && e.source === taskId && e.target === domainId);
+  const createDomain = !existingDomain;
+  const createRelation = !existingRelation;
+  if (createRelation && api.get(relationId) !== undefined) {
+    fail("ID_EXISTS", `关系 id "${relationId}" 已被其他实体占用`, { hint: "换任务或领域名；或先清理占用 id 的实体" });
+  }
+  if (!createDomain && !createRelation) {
+    // 幂等：领域容器与归属关系都在场 → 零提交（revision 不动）
+    const message = `workflow: ${taskId} already in domain ${domainId}`;
+    return { message, data: { task: taskId, domain: domainId, createdDomain: false, createdRelation: false } };
+  }
+  const changes: Change[] = [];
+  if (createDomain) {
+    changes.push({
+      op: "put",
+      kind: DOMAIN_KIND,
+      id: domainId,
+      payload: { title: optionalString(input, "title") ?? domainName, domain: domainName },
+    });
+  }
+  if (createRelation) {
+    // member_of 无命名空间 = 公共类型，所有权法放行（模块只写 wf.* 与公共类型）
+    changes.push({ op: "rel", kind: MEMBER_OF_KIND, id: relationId, source: taskId, target: domainId, payload: {} });
+  }
+  const label = `workflow: assign ${taskId} -> domain ${domainId}`;
+  api.commit({ changes, label, ifRevision: revisionOf(api) });
+  return {
+    message: label,
+    data: { task: taskId, domain: domainId, createdDomain: createDomain, createdRelation: createRelation },
+  };
 }
 
 function verifyTask(api: ModuleApi, ctx: CommandContext): CommandOutput {
@@ -522,7 +609,7 @@ export const WORKFLOW_COMMANDS: readonly WorkflowCommandDef[] = (
     spec: {
       name: "create-relation",
       title:
-        "建 wf.depends_on|wf.fallback|wf.iterates 关系（端点存在性由 core 悬空边检查执法）。depends_on 方向语义：source 是前置（被依赖），target 是后继（依赖方），source 未 passed 时 target 不可 ready/claim。必填键：id/kind/source/target；可选：label",
+        "建 wf.depends_on|wf.fallback|wf.iterates 关系（端点存在性由 core 悬空边检查执法）。depends_on 方向语义：source 是前置（被依赖），target 是后继（依赖方），source 未 passed 时 target 不可 ready/claim。wf.report_of 由 wf.record-report 自动双写、member_of 由 wf.assign-domain 维护，不走本命令。必填键：id/kind/source/target；可选：label",
       input: {
         type: "object",
         required: ["id", "kind", "source", "target"],
@@ -572,7 +659,7 @@ export const WORKFLOW_COMMANDS: readonly WorkflowCommandDef[] = (
     spec: {
       name: "record-checkpoint",
       title:
-        "上报 checkpoint（小状态机，同状态幂等；human 终态只能由 user 确认）。必填键：id/status（新建 checkpoint 另需 verifier）；可选：actor/by/note/label/now",
+        "上报 checkpoint 到任务内嵌数组 payload.checkpoints（1.1.0 起无独立 checkpoint 对象；小状态机同状态幂等，human 终态只能由 user 确认；同任务内 id 命中即原位更新，跨任务全图唯一由领域钩子执法）。必填键：id/status（新建 checkpoint 另需 verifier）；可选：actor/by/note/label/now",
       target: TASK_KIND,
       input: {
         type: "object",
@@ -595,7 +682,7 @@ export const WORKFLOW_COMMANDS: readonly WorkflowCommandDef[] = (
     spec: {
       name: "record-report",
       title:
-        "写入执行报告（独立一等证据对象 wf.execution_report）：input.id 是报告自身 id（生成独立对象），位置参数 target 是任务 id，报告经 relations 关联到任务。必填键：id/summary；可选：artifacts/blockers/notes/now",
+        "写入执行报告（独立一等证据对象 wf.execution_report）并自动双写归属关系 wf.report_of（同一次提交原子落盘；关系 id 自动 = rel-of-<报告id>，source=报告 target=任务，direction=directed；同 id 重复提交按 core rel 语义更新）：input.id 是报告自身 id（生成独立对象），位置参数 target 是任务 id。必填键：id/summary；可选：artifacts/blockers/notes/now",
       target: TASK_KIND,
       input: {
         type: "object",
@@ -678,5 +765,18 @@ export const WORKFLOW_COMMANDS: readonly WorkflowCommandDef[] = (
       input: { type: "object", required: ["class"], properties: { class: CLASS_ENUM } },
     },
     handler: setClass,
+  },
+  {
+    spec: {
+      name: "assign-domain",
+      title:
+        "把任务挂到领域容器（1.1.0 容器类活样板；全局命令，无位置参数）：wf.domain 对象不存在则创建（id = domain 名 slugify 规范化，title 缺省 = domain 名），并建公共 member_of 关系（source=任务 target=领域，无命名空间类型所有权法放行）；重复执行幂等（已存在关系不重复建，全在座时零提交）。必填键：task/domain；可选：title",
+      input: {
+        type: "object",
+        required: ["task", "domain"],
+        properties: { task: { type: "string" }, domain: { type: "string" }, title: { type: "string" } },
+      },
+    },
+    handler: assignDomain,
   },
 ]);

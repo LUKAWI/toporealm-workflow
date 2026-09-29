@@ -81,7 +81,7 @@ describe("workflow 领域钩子（前向转换全来源执法 + undo/redo 豁免
     expect(err.message).toContain("缺少非空 execution report");
   });
 
-  it("human 代签：CLI 直改 checkpoint/verification 终态 → VETOED（HUMAN_CONFIRMATION_REQUIRED）", async () => {
+  it("human 代签：CLI 直改内嵌 checkpoint/verification 终态 → VETOED（HUMAN_CONFIRMATION_REQUIRED）", async () => {
     const rig = await workflowRig();
     rigs.push(rig);
     await readyTask(rig, "t1");
@@ -90,8 +90,14 @@ describe("workflow 领域钩子（前向转换全来源执法 + undo/redo 豁免
       target: "t1",
       input: { id: "cp-h", status: "pending", verifier: "human" },
     });
+    // 1.1.0：checkpoint 内嵌任务 payload.checkpoints——CLI 直改整组数组同样被钩子逐条执法
+    const cpsOf = (): Record<string, unknown>[] =>
+      JSON.parse(JSON.stringify(taskPayloadOf(rig.core, "t1")["checkpoints"])) as Record<string, unknown>[];
+    const cps = cpsOf();
+    (cps.find((c) => c["id"] === "cp-h") as Record<string, unknown>)["status"] = "passed";
+    (cps.find((c) => c["id"] === "cp-h") as Record<string, unknown>)["by"] = "agent";
     const cp = await vetoOf(
-      rig.core.commit({ changes: [{ op: "merge", id: "cp-h", payload: { status: "passed", by: "agent" } }] }, "cli"),
+      rig.core.commit({ changes: [{ op: "merge", id: "t1", payload: { checkpoints: cps } }] }, "cli"),
     );
     expect(cp.message).toContain("HUMAN_CONFIRMATION_REQUIRED");
     const vf = await vetoOf(
@@ -102,14 +108,17 @@ describe("workflow 领域钩子（前向转换全来源执法 + undo/redo 豁免
     );
     expect(vf.message).toContain("HUMAN_CONFIRMATION_REQUIRED");
     // 用户身份放行
-    await rig.core.commit(
-      { changes: [{ op: "merge", id: "cp-h", payload: { status: "passed", by: "user:alice" } }] },
-      "cli",
-    );
-    expect(taskPayloadOf(rig.core, "cp-h")["status"]).toBe("passed");
+    const cpsUser = cpsOf();
+    (cpsUser.find((c) => c["id"] === "cp-h") as Record<string, unknown>)["status"] = "passed";
+    (cpsUser.find((c) => c["id"] === "cp-h") as Record<string, unknown>)["by"] = "user:alice";
+    await rig.core.commit({ changes: [{ op: "merge", id: "t1", payload: { checkpoints: cpsUser } }] }, "cli");
+    expect((taskPayloadOf(rig.core, "t1")["checkpoints"] as Record<string, unknown>[]).find((c) => c["id"] === "cp-h")).toMatchObject({
+      status: "passed",
+      by: "user:alice",
+    });
   });
 
-  it("checkpoint 小状态机：passed → running 直改 → VETOED（同状态幂等放行）", async () => {
+  it("内嵌 checkpoint 小状态机：passed → running 直改 → VETOED（同状态幂等放行）", async () => {
     const rig = await workflowRig();
     rigs.push(rig);
     await readyTask(rig, "t1");
@@ -118,12 +127,21 @@ describe("workflow 领域钩子（前向转换全来源执法 + undo/redo 豁免
       target: "t1",
       input: { id: "cp-1", status: "passed", verifier: "self", by: "w" },
     });
+    const cps = JSON.parse(JSON.stringify(taskPayloadOf(rig.core, "t1")["checkpoints"])) as Record<string, unknown>[];
+    (cps.find((c) => c["id"] === "cp-1") as Record<string, unknown>)["status"] = "running";
     const err = await vetoOf(
-      rig.core.commit({ changes: [{ op: "merge", id: "cp-1", payload: { status: "running" } }] }, "cli"),
+      rig.core.commit({ changes: [{ op: "merge", id: "t1", payload: { checkpoints: cps } }] }, "cli"),
     );
     expect(err.message).toContain("INVALID_CHECKPOINT_TRANSITION");
-    // 同状态重复上报幂等（0.x 同款）
-    await rig.core.commit({ changes: [{ op: "merge", id: "cp-1", payload: { status: "passed" } }] }, "cli");
+    expect(err.message).toContain("cp-1");
+    // 同状态重复上报幂等（0.x 同款）：触碰条目（改 at）但状态不变 → 放行
+    const same = JSON.parse(JSON.stringify(taskPayloadOf(rig.core, "t1")["checkpoints"])) as Record<string, unknown>[];
+    (same.find((c) => c["id"] === "cp-1") as Record<string, unknown>)["at"] = "2026-09-11T01:00:00.000Z";
+    await rig.core.commit({ changes: [{ op: "merge", id: "t1", payload: { checkpoints: same } }] }, "cli");
+    expect((taskPayloadOf(rig.core, "t1")["checkpoints"] as Record<string, unknown>[]).find((c) => c["id"] === "cp-1")).toMatchObject({
+      status: "passed",
+      at: "2026-09-11T01:00:00.000Z",
+    });
   });
 
   it("D24① 关键回归：undo/redo 豁免领域门禁——passed 的合法逆转可撤销、可重做", async () => {
@@ -138,10 +156,15 @@ describe("workflow 领域钩子（前向转换全来源执法 + undo/redo 豁免
     // undo「passed → running」是前向视角的非法流转，但它是已过管线的提交的游标移动 → 必须放行
     await rig.core.undo(1, "cli");
     expect(taskPayloadOf(rig.core, "t1")["status"]).toBe("running");
+    // 1.1.0：报告与 report_of 关系同 revision 落盘 → undo 整体撤销（对象+关系一起消失）
+    expect(rig.core.read({ kinds: ["wf.report_of"] }).entities).toHaveLength(1);
     await rig.core.undo(1, "cli"); // verify 撤销
     expect(taskPayloadOf(rig.core, "t1")["verification"]).toBeUndefined();
-    await rig.core.undo(1, "cli"); // report 撤销
+    await rig.core.undo(1, "cli"); // report 撤销（对象+关系原子回滚）
+    expect(rig.core.read({ kinds: ["wf.report_of"] }).entities).toHaveLength(0);
+    expect(rig.core.read({ ids: ["report-t1"] }).entities).toHaveLength(0);
     await rig.core.undo(1, "cli"); // checkpoint 撤销
+    expect(taskPayloadOf(rig.core, "t1")["checkpoints"]).toBeUndefined();
     await rig.core.undo(1, "cli"); // claim 撤销
     expect(taskPayloadOf(rig.core, "t1")["status"]).toBe("ready");
     // redo 重放前向序列（redo 也豁免；重放的是当时已过管线的变更）

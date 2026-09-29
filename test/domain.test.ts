@@ -3,8 +3,13 @@ import {
   allowedTransitions,
   assertTransition,
   canTransition,
+  checkpointEntryFromRaw,
+  checkpointEntryToRaw,
   checkpointFromRecord,
+  checkpointToEntry,
   checkpointToRecord,
+  domainSlugify,
+  entryToCheckpoint,
   relationFromRecord,
   relationToRecord,
   reportFromRecord,
@@ -12,17 +17,21 @@ import {
   taskFromRecord,
   taskToRecord,
   CHECKPOINT_STATUSES,
+  DOMAIN_KIND,
+  MEMBER_OF_KIND,
+  REPORT_OF_KIND,
   VERIFICATION_SOURCES,
   WORKFLOW_CLASSES,
   WORKFLOW_RELATION_KINDS,
   WORKFLOW_STATUSES,
+  reportOfRelationId,
   type WorkflowCheckpoint,
   type WorkflowExecutionReport,
   type WorkflowRelation,
   type WorkflowTask,
 } from "../src/domain.js";
 
-// ---------- domain.test.ts 的 1.0 形态：wf.* 词汇 + payload.title 投影 ----------
+// ---------- domain.test.ts 的 1.0 形态：wf.* 词汇 + payload.title 投影；1.1.0 增补挂靠拓扑词汇 ----------
 
 describe("workflow 领域模型", () => {
   it("冻结公开词汇：七态、三档、三来源、三种关系、五态 checkpoint", () => {
@@ -31,6 +40,18 @@ describe("workflow 领域模型", () => {
     expect(VERIFICATION_SOURCES).toEqual(["self", "independent", "human"]);
     expect(WORKFLOW_RELATION_KINDS).toEqual(["wf.depends_on", "wf.fallback", "wf.iterates"]);
     expect(CHECKPOINT_STATUSES).toEqual(["pending", "running", "passed", "failed", "skipped"]);
+  });
+
+  it("1.1.0 挂靠拓扑词汇：report_of 自动 id、domain 容器、公共 member_of、slugify 规范化", () => {
+    expect(REPORT_OF_KIND).toBe("wf.report_of");
+    expect(DOMAIN_KIND).toBe("wf.domain");
+    expect(MEMBER_OF_KIND).toBe("member_of");
+    // 三条硬约定之二：自动生成的关系 id 一律 rel-of-<报告对象 id>
+    expect(reportOfRelationId("rep-v120-g1")).toBe("rel-of-rep-v120-g1");
+    expect(reportOfRelationId("report-a")).toBe("rel-of-report-a");
+    expect(domainSlugify("Web UI")).toBe("web-ui");
+    expect(domainSlugify("  前端 交互 ")).toBe("前端-交互");
+    expect(domainSlugify("///")).toBe("");
   });
 
   it("接受全部已声明流转，拒绝未声明流转", () => {
@@ -78,6 +99,31 @@ describe("workflow 领域模型", () => {
       const relation: WorkflowRelation = { id: kind, kind, source: "a", target: "b" };
       expect(relationFromRecord(relationToRecord(relation))).toMatchObject({ id: kind, kind, source: "a", target: "b" });
     }
+  });
+
+  it("1.1.0 内嵌 checkpoint 条目：raw ↔ 条目 ↔ 状态机通货往返稳定（taskId 不进条目）", () => {
+    const raw = { id: "cp-1", status: "passed", verifier: "human", label: "复核", note: "已确认", by: "user:alice", at: "2026-09-11T00:00:00.000Z" };
+    const entry = checkpointEntryFromRaw(raw);
+    expect(entry).toEqual({ id: "cp-1", status: "passed", verifier: "human", label: "复核", note: "已确认", by: "user:alice", at: "2026-09-11T00:00:00.000Z" });
+    expect(checkpointEntryToRaw(entry)).toEqual(raw);
+    // 条目 → 状态机通货（taskId 补所属任务；label 缺省 = id）→ updateCheckpoint 同款形状
+    expect(entryToCheckpoint(entry, "task-1")).toEqual({
+      id: "cp-1",
+      taskId: "task-1",
+      title: "复核",
+      status: "passed",
+      verifier: "human",
+      note: "已确认",
+      by: "user:alice",
+      updatedAt: "2026-09-11T00:00:00.000Z",
+    });
+    // 无 label 条目：title=id 不回写 label，往返稳定
+    const bare = checkpointEntryFromRaw({ id: "cp-2", status: "pending", verifier: "self" });
+    expect(checkpointEntryToRaw(checkpointToEntry(entryToCheckpoint(bare, "t")))).toEqual({ id: "cp-2", status: "pending", verifier: "self" });
+    // 形状与词汇执法
+    expect(() => checkpointEntryFromRaw("garbage")).toThrow("INVALID_CHECKPOINT_ENTRY");
+    expect(() => checkpointEntryFromRaw({ status: "pending" })).toThrow("INVALID_CHECKPOINT_ENTRY");
+    expect(() => checkpointEntryFromRaw({ id: "cp-3", status: "reviewing" })).toThrow("INVALID_CHECKPOINT_STATUS");
   });
 
   it("拒绝自定义任务状态与公开关系之外的 kind", () => {

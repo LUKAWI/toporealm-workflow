@@ -6,11 +6,12 @@
 // 凭 CommitCandidate.conversion（D24①）豁免——否则「passed → running」的合法逆转被否决，
 // 撤销永久失灵。
 //
-// 执法清单（与 0.x 语义一一对应）：
+// 执法清单（与 0.x 语义一一对应；1.1.0 起 checkpoint 内嵌任务 payload.checkpoints）：
 //   七态流转（INVALID_TRANSITION / 未知状态 INVALID_WORKFLOW_STATUS）
 //   依赖门禁（DEPENDENCY_UNMET：置 ready/running 时 depends_on 前置须全部 passed）
 //   完成门禁（TASK_NOT_COMPLETE：报告 + checkpoint 聚合 + self/human 结论）
-//   checkpoint 小状态机（INVALID_CHECKPOINT_TRANSITION，同状态幂等）
+//   checkpoint 小状态机（INVALID_CHECKPOINT_TRANSITION，同状态幂等）——内嵌条目级
+//   checkpoint 状态词汇（INVALID_CHECKPOINT_STATUS）与跨任务全图唯一（CHECKPOINT_ID_TAKEN）
 //   human 代签拦截（HUMAN_CONFIRMATION_REQUIRED：checkpoint 与 verification 两侧）
 // 关系与删除不设领域门禁（悬空边是 core 执法；0.x 同样不拦）。
 // 钩子对任意候选图保持全函数（脏数据按 veto 拒绝，不抛异常——core 不聚合钩子异常）。
@@ -26,9 +27,11 @@ import {
   TASK_KIND,
   WORKFLOW_STATUSES,
   type CheckpointStatus,
+  type VerificationSource,
+  type WorkflowCheckpoint,
   type WorkflowStatus,
 } from "./domain.js";
-import { assessTaskCompletion, isUserIdentity, type WorkflowCheckpoint } from "./evidence.js";
+import { assessTaskCompletion, isUserIdentity } from "./evidence.js";
 import { getUnmetDependencies } from "./scheduler.js";
 import type { CommitCandidate, Entity, EntityId } from "@lukawi/toporealm-module-sdk";
 
@@ -46,34 +49,81 @@ function statusOf(record: Entity): WorkflowStatus | typeof UNKNOWN {
     : UNKNOWN;
 }
 
-function checkpointStatusOf(record: Entity): CheckpointStatus | typeof UNKNOWN {
-  const raw = record.payload["status"] ?? "pending";
+function checkpointStatusValue(raw: unknown): CheckpointStatus | typeof UNKNOWN {
   return typeof raw === "string" && (CHECKPOINT_STATUSES as readonly string[]).includes(raw)
     ? (raw as CheckpointStatus)
     : UNKNOWN;
 }
 
-/** 宽松解析 after 快照里的 checkpoint（脏数据跳过，不让钩子抛异常）。 */
-function looseCheckpoints(objects: readonly Entity[], taskId: string): WorkflowCheckpoint[] {
+// ---------- 内嵌 checkpoint 条目（1.1.0）的宽松读取 ----------
+
+type RawEntry = Record<string, unknown>;
+
+function isRawEntry(item: unknown): item is RawEntry {
+  return item !== null && typeof item === "object" && !Array.isArray(item);
+}
+
+function entryId(item: unknown): string | undefined {
+  if (!isRawEntry(item)) return undefined;
+  const id = item["id"];
+  return typeof id === "string" && id !== "" ? id : undefined;
+}
+
+function rawEntries(entity: Entity): readonly unknown[] {
+  const raw = entity.payload["checkpoints"];
+  return Array.isArray(raw) ? raw : [];
+}
+
+/** 宽松解析任务内嵌 checkpoint（脏条目跳过，不让钩子抛异常）；taskId 由所属任务承载。 */
+function embeddedCheckpoints(task: Entity): WorkflowCheckpoint[] {
   const out: WorkflowCheckpoint[] = [];
-  for (const record of objects) {
-    if (record.kind !== CHECKPOINT_KIND) continue;
-    if (record.payload["taskId"] !== taskId) continue;
-    const status = checkpointStatusOf(record);
+  for (const item of rawEntries(task)) {
+    const id = entryId(item);
+    if (id === undefined) continue;
+    const data = item as RawEntry;
+    const status = checkpointStatusValue(data["status"]);
     if (status === UNKNOWN) continue;
     out.push({
-      id: record.id,
-      taskId,
-      title: typeof record.payload["title"] === "string" ? record.payload["title"] : record.id,
+      id,
+      taskId: task.id,
+      title: typeof data["label"] === "string" ? data["label"] : id,
       status,
       verifier:
-        record.payload["verifier"] === "human" || record.payload["verifier"] === "independent"
-          ? record.payload["verifier"]
+        data["verifier"] === "human" || data["verifier"] === "independent"
+          ? (data["verifier"] as VerificationSource)
           : "self",
-      ...(typeof record.payload["by"] === "string" ? { by: record.payload["by"] as string } : {}),
+      ...(typeof data["by"] === "string" ? { by: data["by"] as string } : {}),
     });
   }
   return out;
+}
+
+function sameRaw(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
+
+function countEntries(entity: Entity | undefined, checkpointId: string): number {
+  if (!entity) return 0;
+  let count = 0;
+  for (const item of rawEntries(entity)) {
+    if (entryId(item) === checkpointId) count += 1;
+  }
+  return count;
+}
+
+/** after/before 快照中内嵌了该 checkpoint id 的任务列表（按快照内对象序，确定性强）。 */
+function tasksOwningCheckpoint(objects: readonly Entity[], checkpointId: string): string[] {
+  const owners: string[] = [];
+  for (const o of objects) {
+    if (o.kind !== TASK_KIND) continue;
+    if (rawEntries(o).some((item) => entryId(item) === checkpointId)) owners.push(o.id);
+  }
+  return owners;
 }
 
 /** 提交中实际触碰的 id（put/merge 直接写；del 不做领域门禁）。 */
@@ -98,7 +148,10 @@ export function workflowGate(c: CommitCandidate): Veto | undefined {
     if (next.kind === TASK_KIND) {
       const veto = gateTask(c, before.get(id), next);
       if (veto) return veto;
+      const cpVeto = gateTaskCheckpoints(c, before.get(id), next);
+      if (cpVeto) return cpVeto;
     } else if (next.kind === CHECKPOINT_KIND) {
+      // 遗留防线（1.0 独立 checkpoint 对象）：1.1.0 起模块不再产出，直改仍不破状态机
       const veto = gateCheckpoint(before.get(id), next);
       if (veto) return veto;
     }
@@ -160,7 +213,7 @@ function gateByTargetStatus(c: CommitCandidate, next: Entity, to: WorkflowStatus
   }
   if (to === "passed") {
     const task = taskFromRecord(next);
-    const checkpoints = looseCheckpoints(c.after.objects, task.id);
+    const checkpoints = embeddedCheckpoints(next);
     // 完成门禁只消费 summary/taskId；其余字段按空补齐（0.x runtime taskEvidence 同款宽松读）
     const reports = c.after.objects
       .filter((o) => o.kind === REPORT_KIND && o.payload["taskId"] === task.id)
@@ -183,8 +236,76 @@ function gateByTargetStatus(c: CommitCandidate, next: Entity, to: WorkflowStatus
   return undefined;
 }
 
+/**
+ * 内嵌 checkpoint 条目级执法（1.1.0）：状态词汇、小状态机、human 代签、id 唯一。
+ * 只拦「本次提交触碰（新增/改写）的条目」——未触碰条目的脏存量放行（与旧钩子 prev UNKNOWN
+ * 同宽），重复 id 也只拦本次新造的重复（否则脏数据无法修复）。
+ */
+function gateTaskCheckpoints(c: CommitCandidate, prev: Entity | undefined, next: Entity): Veto | undefined {
+  const prevById = new Map<string, unknown>();
+  if (prev) {
+    for (const item of rawEntries(prev)) {
+      const id = entryId(item);
+      if (id !== undefined) prevById.set(id, item);
+    }
+  }
+  for (const item of rawEntries(next)) {
+    const id = entryId(item);
+    if (id === undefined) continue; // 缺 id 的垃圾项无法寻址，不在执法范围
+
+    // 跨任务全图唯一 + 同任务数组内唯一：对触碰任务数组内出现的每个 id 检查（含值未变的条目，
+    // 否则值相同的重复项会漏拦），但只拦「本次新造的重复」——脏存量放行，可修复。
+    const dupAfter = tasksOwningCheckpoint(c.after.objects, id).length > 1 || countEntries(next, id) > 1;
+    const dupBefore = tasksOwningCheckpoint(c.before.objects, id).length > 1 || countEntries(prev, id) > 1;
+    if (dupAfter && !dupBefore) {
+      const owners = tasksOwningCheckpoint(c.after.objects, id);
+      const others = owners.filter((t) => t !== next.id);
+      return {
+        veto:
+          others.length > 0
+            ? `CHECKPOINT_ID_TAKEN: checkpoint "${id}" 已内嵌于任务 ${others.join("、")}（内嵌 checkpoint 跨任务全图唯一）`
+            : `CHECKPOINT_ID_TAKEN: checkpoint "${id}" 在任务 ${next.id} 的 checkpoints 数组中重复`,
+        details: { id, task: next.id, owners },
+      };
+    }
+
+    const prevRaw = prevById.get(id);
+    if (sameRaw(prevRaw, item)) continue; // 未触碰条目：原样保留即放行
+    const data = item as RawEntry;
+    const to = checkpointStatusValue(data["status"]);
+    if (to === UNKNOWN) {
+      return {
+        veto: `INVALID_CHECKPOINT_STATUS: ${String(data["status"])}`,
+        details: { id, task: next.id, status: data["status"] ?? null },
+      };
+    }
+    // human checkpoint 的终态必须由用户确认（by = user 身份）——对一切前向来源生效
+    if (
+      data["verifier"] === "human" &&
+      isTerminalCheckpoint(to) &&
+      !isUserIdentity(typeof data["by"] === "string" ? data["by"] : undefined)
+    ) {
+      return {
+        veto: "HUMAN_CONFIRMATION_REQUIRED: human checkpoint 只能由用户确认",
+        details: { id, task: next.id, status: to, verifier: data["verifier"], by: data["by"] ?? null },
+      };
+    }
+    if (prevRaw !== undefined && isRawEntry(prevRaw)) {
+      const from = checkpointStatusValue(prevRaw["status"]);
+      if (from !== UNKNOWN && from !== to && !canTransitionCheckpoint(from, to)) {
+        return {
+          veto: `INVALID_CHECKPOINT_TRANSITION: ${id} ${from} -> ${to}`,
+          details: { id, task: next.id, from, to },
+        };
+      }
+    }
+    // 新建条目：只查词汇、human 门禁与唯一性，不查流转（与旧钩子一致）
+  }
+  return undefined;
+}
+
 function gateCheckpoint(prev: Entity | undefined, next: Entity): Veto | undefined {
-  const to = checkpointStatusOf(next);
+  const to = checkpointStatusValue(next.payload["status"]);
   if (to === UNKNOWN) {
     return {
       veto: `INVALID_CHECKPOINT_STATUS: ${String(next.payload["status"])}`,
@@ -203,7 +324,7 @@ function gateCheckpoint(prev: Entity | undefined, next: Entity): Veto | undefine
     };
   }
   if (!prev) return undefined; // 新建 checkpoint：只查词汇与 human 门禁，不查流转
-  const from = checkpointStatusOf(prev);
+  const from = checkpointStatusValue(prev.payload["status"]);
   if (from === UNKNOWN || to === from) return undefined; // 脏存量放行；同状态幂等
   if (!canTransitionCheckpoint(from, to)) {
     return {

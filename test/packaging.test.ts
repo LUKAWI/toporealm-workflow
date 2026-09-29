@@ -50,7 +50,7 @@ describe("workflow 包形状（1.0 自包含模块）", () => {
         dependencies?: unknown;
         scripts: Record<string, string>;
       };
-      expect(pkg.version).toBe("1.0.2");
+      expect(pkg.version).toBe("1.1.0");
       expect(pkg.dependencies).toBeUndefined(); // 自包含：发布包不保留 dependencies
       for (const script of Object.keys(pkg.scripts)) {
         expect(["preinstall", "install", "postinstall"]).not.toContain(script);
@@ -65,7 +65,7 @@ describe("workflow 包形状（1.0 自包含模块）", () => {
     expect(text).toContain("format: toporealm.module/v2");
     expect(text).toContain("id: workflow");
     expect(text).toContain("namespace: wf");
-    expect(text).toContain('version: "1.0.2"');
+    expect(text).toContain('version: "1.1.0"');
     expect(text).toContain("entry: ./dist/index.js");
   });
 });

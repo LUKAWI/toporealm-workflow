@@ -22,23 +22,28 @@ const COMMAND_IDS = [
   "wf.activate-fallback",
   "wf.record-iteration",
   "wf.set-class",
+  "wf.assign-domain",
 ];
 
 describe("workflow 领域命令（wf.* 顶层子命令）", () => {
-  it("向目录注册固定的 12 个 wf.* 命令（顺序 = 0.x operations 顺序），写入走 api.commit", async () => {
+  it("向目录注册固定的 13 个 wf.* 命令（12 个 0.x 语义命令 + 1.1.0 assign-domain），写入走 api.commit", async () => {
     const rig = await workflowRig();
     rigs.push(rig);
     const cat = rig.host.catalog();
-    expect(cat.modules).toEqual([{ id: "workflow", version: "1.0.2", namespace: "wf" }]);
+    expect(cat.modules).toEqual([{ id: "workflow", version: "1.1.0", namespace: "wf" }]);
     expect(cat.commands.map((c) => c.id)).toEqual(COMMAND_IDS);
-    // 声明词汇进目录（kinds 投影 + owner）
+    // 声明词汇进目录（kinds 投影 + owner）；1.1.0：wf.checkpoint 退场、wf.domain/wf.report_of 进场
     const kinds = Object.fromEntries(cat.kinds.map((k) => [k.kind, k]));
     expect(kinds["wf.task"]).toMatchObject({ owner: "wf", color: "#3b82f6" });
     expect(kinds["wf.depends_on"]).toMatchObject({ owner: "wf" });
     expect(kinds["wf.settings"]).toMatchObject({ owner: "wf" });
-    // D24②：form 注册面经目录投影过缝
+    expect(kinds["wf.report_of"]).toMatchObject({ owner: "wf" });
+    expect(kinds["wf.domain"]).toMatchObject({ owner: "wf" });
+    expect(kinds["wf.checkpoint"]).toBeUndefined();
+    // D24②：form 注册面经目录投影过缝；wf.checkpoint 独立表单随内嵌移除
     const forms = Object.fromEntries((cat.forms ?? []).map((f) => [f.kind, f.form]));
     expect(forms["wf.task"]?.fields.some((f) => f.name === "status")).toBe(true);
+    expect(forms["wf.checkpoint"]).toBeUndefined();
 
     const created = await rig.run("wf.create-task", {
       input: {
@@ -60,27 +65,36 @@ describe("workflow 领域命令（wf.* 顶层子命令）", () => {
     expect(rig.core.revision).toBe(1); // 只读命令不产生提交
   });
 
-  it("贯通 ready -> claim -> checkpoint/report/verify -> passed，证据保持一等寻址", async () => {
+  it("贯通 ready -> claim -> checkpoint/report/verify -> passed，checkpoint 内嵌任务、报告双写 report_of", async () => {
     const rig = await workflowRig();
     rigs.push(rig);
     await readyTask(rig, "task-a", { definitionOfDone: ["done"] });
     await rig.run("wf.claim-task", { target: "task-a", input: { claimBy: "worker-a", now: "2026-09-11T00:02:00.000Z" } });
     await rig.run("wf.record-checkpoint", {
       target: "task-a",
-      input: { id: "cp-a", label: "Tests", status: "passed", verifier: "self", by: "worker-a" },
+      input: { id: "cp-a", label: "Tests", status: "passed", verifier: "self", by: "worker-a", now: "2026-09-11T00:02:30.000Z" },
     });
     await rig.run("wf.record-report", {
       target: "task-a",
-      input: { id: "report-a", summary: "Implemented", artifacts: ["dist/index.js"], blockers: [] },
+      input: { id: "report-a", summary: "Implemented", artifacts: ["dist/index.js"], blockers: [], now: "2026-09-11T00:02:40.000Z" },
     });
     await rig.run("wf.verify-task", { target: "task-a", input: { source: "self", verdict: "passed", by: "worker-a" } });
     await rig.run("wf.transition-task", { target: "task-a", input: { status: "passed", now: "2026-09-11T00:03:00.000Z" } });
 
     const ids = rig.core.read().entities.map((e) => e.id);
-    expect(ids).toEqual(expect.arrayContaining(["task-a", "cp-a", "report-a"]));
+    expect(ids).toEqual(expect.arrayContaining(["task-a", "report-a"]));
+    // 1.1.0：record-checkpoint 不再产生独立对象（checkpoint 内嵌任务 payload.checkpoints）
+    expect(ids).not.toContain("cp-a");
+    expect(rig.core.read({ kinds: ["wf.checkpoint"] }).entities).toHaveLength(0);
     expect(taskPayloadOf(rig.core, "task-a")).toMatchObject({ status: "passed", verification: { source: "self", verdict: "passed" } });
-    expect(taskPayloadOf(rig.core, "cp-a")).toMatchObject({ kind: "wf.checkpoint", taskId: "task-a", status: "passed" });
+    expect(taskPayloadOf(rig.core, "task-a")["checkpoints"]).toEqual([
+      { id: "cp-a", status: "passed", verifier: "self", label: "Tests", by: "worker-a", at: "2026-09-11T00:02:30.000Z" },
+    ]);
     expect(taskPayloadOf(rig.core, "report-a")).toMatchObject({ kind: "wf.execution_report", taskId: "task-a" });
+    // 1.1.0 双写：报告经 wf.report_of 关系挂到任务（id=rel-of-<报告id>，source=报告 target=任务）
+    const rels = rig.core.read({ kinds: ["wf.report_of"] }).entities;
+    expect(rels).toHaveLength(1);
+    expect(rels[0]).toMatchObject({ id: "rel-of-report-a", kind: "wf.report_of", source: "report-a", target: "task-a", direction: "directed", payload: {} });
     // passed 收口清空认领（merge null = 删键）
     expect(taskPayloadOf(rig.core, "task-a")["assignedTo"]).toBeUndefined();
   });
@@ -234,12 +248,21 @@ describe("workflow 领域命令（wf.* 顶层子命令）", () => {
     expect(titles["wf.claim-task"]).toContain("claimBy（认领者）");
     expect(titles["wf.claim-task"]).toContain("assignedTo/startedAt 由系统写入");
     expect(titles["wf.claim-task"]).toContain("必填键：claimBy");
-    // F5：depends_on 方向语义（source 前置 / target 后继）
+    // F5：depends_on 方向语义（source 前置 / target 后继）+ 系统维护关系不手工建
     expect(titles["wf.create-relation"]).toContain("source 是前置（被依赖），target 是后继（依赖方）");
-    // F7：record-report 的 id 是报告自身 id，target 是任务
+    expect(titles["wf.create-relation"]).toContain("wf.report_of 由 wf.record-report 自动双写");
+    // F7：record-report 的 id 是报告自身 id，target 是任务；1.1.0 双写 report_of 成真
     expect(titles["wf.record-report"]).toContain("input.id 是报告自身 id");
     expect(titles["wf.record-report"]).toContain("位置参数 target 是任务 id");
-    // F6：12 条命令 title 统一带必填/可选输入键清单
+    expect(titles["wf.record-report"]).toContain("wf.report_of");
+    expect(titles["wf.record-report"]).toContain("rel-of-<报告id>");
+    // 1.1.0：record-checkpoint 内嵌任务 payload.checkpoints
+    expect(titles["wf.record-checkpoint"]).toContain("payload.checkpoints");
+    expect(titles["wf.record-checkpoint"]).toContain("无独立 checkpoint 对象");
+    // 1.1.0：assign-domain 容器类活样板（必填键清单进 title）
+    expect(titles["wf.assign-domain"]).toContain("member_of");
+    expect(titles["wf.assign-domain"]).toContain("必填键：task/domain");
+    // F6：13 条命令 title 统一带必填/可选输入键清单
     for (const id of COMMAND_IDS) {
       expect(titles[id], id).toMatch(/必填键：/);
     }
